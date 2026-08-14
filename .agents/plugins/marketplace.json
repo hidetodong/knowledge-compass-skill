@@ -1,0 +1,20 @@
+{
+  "name": "knowledge-compass-skill",
+  "interface": {
+    "displayName": "Knowledge Compass"
+  },
+  "plugins": [
+    {
+      "name": "knowledge-compass",
+      "source": {
+        "source": "local",
+        "path": "./plugins/knowledge-compass"
+      },
+      "policy": {
+        "installation": "AVAILABLE",
+        "authentication": "ON_INSTALL"
+      },
+      "category": "Education"
+    }
+  ]
+}

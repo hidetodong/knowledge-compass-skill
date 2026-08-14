@@ -1,0 +1,6 @@
+interface:
+  display_name: "Knowledge Compass"
+  short_description: "Turn unfamiliar terms into a verified learning roadmap"
+  default_prompt: "Use $knowledge-compass to identify the field behind these terms and build a verified learning roadmap from authoritative sources."
+policy:
+  allow_implicit_invocation: true

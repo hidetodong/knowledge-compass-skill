@@ -1,0 +1,83 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>知识罗盘 · 领域库</title>
+<style>
+  :root{
+    --bg:#f4f2ea; --card:#fdfcf9; --ink:#262320; --muted:#6f6a5e;
+    --line:#e7e3d8; --accent:#2f5a4a; --gold:#b08d3f;
+    --hero1:#1e3a32; --hero2:#16302a; --hero-ink:#ece4d2;
+    --serif:Georgia,"Times New Roman","Songti SC","STSong","Source Han Serif SC","Noto Serif CJK SC",serif;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--ink);
+    font-family:system-ui,-apple-system,"PingFang SC","Microsoft YaHei",Segoe UI,Roboto,sans-serif;
+    line-height:1.6;-webkit-font-smoothing:antialiased}
+  .wrap{max-width:880px;margin:0 auto;padding:28px 20px 80px}
+  header.hero{background:linear-gradient(160deg,var(--hero1),var(--hero2));
+    color:var(--hero-ink);border-radius:14px;padding:28px 30px 24px;
+    border:1px solid rgba(176,141,63,.30);box-shadow:0 8px 26px rgba(20,40,30,.22)}
+  .hero h1{font-family:var(--serif);margin:0;font-size:26px;font-weight:600;
+    letter-spacing:.10em;color:#f5efe1}
+  .hero h1::after{content:"";display:block;width:52px;height:3px;
+    background:var(--gold);margin:12px 0 14px;border-radius:2px}
+  .hero .sub{margin:0;font-size:13px;opacity:.85;color:var(--hero-ink)}
+  a.card{display:block;text-decoration:none;color:inherit;background:var(--card);
+    border:1px solid var(--line);border-left:4px solid var(--gold);border-radius:12px;
+    padding:15px 18px;margin:13px 0;box-shadow:0 1px 2px rgba(40,35,20,.04);
+    transition:box-shadow .15s,transform .15s}
+  a.card:hover{box-shadow:0 6px 18px rgba(40,35,20,.10);transform:translateY(-1px)}
+  .card .kicker{font-family:var(--serif);font-size:11.5px;font-weight:700;letter-spacing:.14em;
+    color:var(--gold);margin-bottom:5px}
+  .card .top{display:flex;align-items:baseline;gap:10px}
+  .card .domain{font-family:var(--serif);font-size:18px;font-weight:600;flex:1;min-width:0;
+    letter-spacing:.01em}
+  .conf{font-size:12px;font-weight:600;padding:2px 11px;border-radius:999px;white-space:nowrap;
+    background:#f1ece0;color:var(--gold);border:1px solid rgba(176,141,63,.45)}
+  .disc{margin-top:7px;display:flex;flex-wrap:wrap;gap:6px}
+  .disc span{background:#eef1ec;color:var(--accent);border:1px solid var(--line);
+    border-radius:5px;padding:1px 9px;font-size:12px;font-weight:600}
+  .meta{color:var(--muted);font-size:12.5px;margin-top:8px;display:flex;gap:14px;flex-wrap:wrap}
+  .warnflag{color:#9a6a2e;font-weight:600}
+  .empty{color:var(--muted);font-style:italic;margin-top:48px;text-align:center}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header class="hero">
+    <h1>知识罗盘 · 领域库</h1>
+    <p class="sub" id="sub"></p>
+  </header>
+  <div id="list"></div>
+</div>
+<script>
+const DATA = __LIBRARY_DATA__;
+const $ = s => document.querySelector(s);
+const esc = s => (s==null?"":String(s)).replace(/[&<>"]/g,m=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[m]));
+
+$("#sub").textContent = DATA.length ? (DATA.length + " 份领域指南 · 点卡片回看（最新在前）") : "";
+const list = $("#list");
+if(!DATA.length){
+  list.innerHTML = '<div class="empty">库里还没有领域指南。跑一次 knowledge-compass 就会归档到这里。</div>';
+} else DATA.forEach(it=>{
+  const a = document.createElement("a");
+  a.className = "card"; a.href = it.html;
+  const title = it.topic || it.domain || it.title || "领域指南";
+  const kicker = (it.domain && it.domain !== title)
+    ? `<div class="kicker">${esc(it.domain)}</div>` : "";
+  const conf = it.confidence ? `<span class="conf">置信度 ${esc(it.confidence)}</span>` : "";
+  const discs = Array.isArray(it.disciplines) && it.disciplines.length
+    ? `<div class="disc">${it.disciplines.map(d=>`<span>${esc(d)}</span>`).join("")}</div>` : "";
+  const unv = it.unverified>0 ? `<span class="warnflag">⚠ ${it.unverified} 未核实</span>` : "";
+  a.innerHTML =
+    kicker+
+    `<div class="top"><div class="domain">${esc(title)}</div>${conf}</div>`+
+    discs+
+    `<div class="meta"><span>${esc(it.date || "")}</span><span>${it.sources||0} 来源</span>${unv}</div>`;
+  list.appendChild(a);
+});
+</script>
+</body>
+</html>

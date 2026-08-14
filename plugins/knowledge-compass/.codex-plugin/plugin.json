@@ -1,0 +1,26 @@
+{
+  "name": "knowledge-compass",
+  "version": "0.5.0",
+  "description": "Reverse-map unfamiliar terms to a field, verify authoritative sources, and build an interactive learning roadmap.",
+  "author": {
+    "name": "hidetodong",
+    "url": "https://github.com/hidetodong"
+  },
+  "homepage": "https://github.com/hidetodong/knowledge-compass-skill#readme",
+  "repository": "https://github.com/hidetodong/knowledge-compass-skill",
+  "license": "MIT",
+  "keywords": ["research", "learning", "knowledge", "roadmap", "agent-skill"],
+  "skills": "./skills/",
+  "interface": {
+    "displayName": "Knowledge Compass",
+    "shortDescription": "Turn unfamiliar terms into a verified learning roadmap",
+    "longDescription": "Identify the field behind scattered terminology, verify authoritative sources, and produce a layered, interactive learning roadmap.",
+    "developerName": "hidetodong",
+    "category": "Education",
+    "capabilities": ["Research", "Interactive guide"],
+    "websiteURL": "https://github.com/hidetodong/knowledge-compass-skill",
+    "defaultPrompt": [
+      "Use $knowledge-compass to map these terms to a field and build a verified learning roadmap."
+    ]
+  }
+}

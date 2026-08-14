@@ -1,0 +1,21 @@
+{
+  "$schema": "https://anthropic.com/claude-code/marketplace.schema.json",
+  "name": "knowledge-compass-skill",
+  "owner": {
+    "name": "hidetodong"
+  },
+  "metadata": {
+    "description": "Knowledge Compass: turn unfamiliar terms into a verified learning roadmap.",
+    "version": "0.5.0"
+  },
+  "plugins": [
+    {
+      "name": "knowledge-compass",
+      "source": "./plugins/knowledge-compass",
+      "description": "Reverse-map unfamiliar terms to a field, verify authoritative sources, and build an interactive learning roadmap.",
+      "version": "0.5.0",
+      "category": "education",
+      "tags": ["research", "learning", "knowledge", "roadmap"]
+    }
+  ]
+}

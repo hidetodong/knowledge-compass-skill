@@ -1,0 +1,546 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>领域指南 · knowledge-compass</title>
+<style>
+  :root{
+    --bg:#f4f2ea; --card:#fdfcf9; --ink:#262320; --muted:#6f6a5e;
+    --line:#e7e3d8; --accent:#2f5a4a; --gold:#b08d3f;
+    --hero1:#1e3a32; --hero2:#16302a; --hero-ink:#ece4d2;
+    --serif:Georgia,"Times New Roman","Songti SC","STSong","Source Han Serif SC","Noto Serif CJK SC",serif;
+    --chip-type:#e7efe9; --chip-type-ink:#2f5a4a;
+    --chip-pre:#f3effa; --chip-pre-ink:#6d5aa6;
+    --chip-diff:#f7efe2; --chip-diff-ink:#9a6a2e;
+    --chip-aud:#eaf1ec; --chip-aud-ink:#3f6b53;
+    --chip-free:#eef1ec; --chip-free-ink:#5a6a3f;
+    --chip-ok:#e7efe9; --chip-ok-ink:#2f5a4a;
+    --chip-warn:#f7ece0; --chip-warn-ink:#9a6a2e;
+    --must:#b08d3f; --rec:#9bb0c4; --opt:#d8d3c6;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--ink);
+    font-family:system-ui,-apple-system,"PingFang SC","Microsoft YaHei",Segoe UI,Roboto,sans-serif;
+    line-height:1.6;-webkit-font-smoothing:antialiased}
+  .wrap{max-width:880px;margin:0 auto;padding:28px 20px 80px}
+  header.hero{background:linear-gradient(160deg,var(--hero1),var(--hero2));
+    color:var(--hero-ink);border-radius:14px;padding:30px 30px 26px;
+    border:1px solid rgba(176,141,63,.30);box-shadow:0 8px 26px rgba(20,40,30,.22)}
+  .hero .kicker{display:inline-block;font-family:var(--serif);font-size:13.5px;font-weight:700;
+    letter-spacing:.20em;color:var(--gold);margin:0 0 8px}
+  .hero h1{font-family:var(--serif);margin:0;font-size:30px;font-weight:600;
+    letter-spacing:.12em;color:#f5efe1}
+  .hero h1::after{content:"";display:block;width:56px;height:3px;
+    background:var(--gold);margin:14px 0 16px;border-radius:2px}
+  .frags{display:flex;flex-wrap:wrap;gap:8px;margin:0 0 14px}
+  .frag{background:rgba(236,228,210,.08);border:1px solid rgba(236,228,210,.30);
+    color:var(--hero-ink);border-radius:6px;padding:3px 11px;font-size:13px}
+  .hero .judgment{margin:0;font-size:14.5px;opacity:.92;color:var(--hero-ink)}
+  .hero .verdict-line{display:flex;flex-wrap:wrap;align-items:center;gap:10px 14px;margin:13px 0 0}
+  .hero .conf{display:inline-flex;align-items:center;gap:5px;background:rgba(176,141,63,.18);
+    border:1px solid rgba(176,141,63,.55);color:#f0e7d4;border-radius:999px;
+    padding:2px 12px;font-size:12.5px;font-weight:600;white-space:nowrap}
+  .hero .excluded{font-size:13px;opacity:.78;color:var(--hero-ink)}
+  .disc-row{display:flex;flex-wrap:wrap;align-items:center;gap:8px;margin:13px 0 0}
+  .disc-row .lab{font-size:12.5px;opacity:.8;color:var(--hero-ink)}
+  .disc{background:rgba(176,141,63,.16);border:1px solid rgba(176,141,63,.50);
+    color:#f0e7d4;border-radius:6px;padding:2px 11px;font-size:12.5px;font-weight:600}
+  .legend{display:flex;flex-wrap:wrap;gap:14px;margin:16px 2px 0;font-size:12.5px;color:var(--muted)}
+  .legend span{display:inline-flex;align-items:center;gap:5px}
+  .dot{width:10px;height:10px;border-radius:3px;display:inline-block}
+  .info{background:var(--card);border:1px solid var(--line);border-radius:12px;
+    padding:16px 18px;margin:14px 0 6px}
+  .info h2{margin:0 0 6px;font-size:13px;color:var(--muted);letter-spacing:.04em;font-weight:600}
+  .info p{margin:0;font-size:14.5px}
+  .info.prereqs{border-left:4px solid var(--gold)}
+  /* 正文引用角标 */
+  sup.cite{font-size:11px;line-height:0;margin-left:1px;white-space:nowrap}
+  sup.cite a{color:var(--accent);text-decoration:none;font-weight:700}
+  sup.cite a:hover{text-decoration:underline}
+  /* 视图切换 */
+  .viewtoggle{display:inline-flex;gap:4px;margin:20px 2px 2px;background:#ece8dd;
+    border:1px solid var(--line);border-radius:9px;padding:3px}
+  .viewtoggle button{border:0;background:transparent;color:var(--muted);cursor:pointer;
+    font:inherit;font-size:13px;font-weight:600;padding:5px 14px;border-radius:7px;transition:.15s}
+  .viewtoggle button.on{background:var(--accent);color:#fff}
+  section.layer{margin-top:26px}
+  .layer-head{display:flex;align-items:baseline;gap:10px;padding-bottom:6px;
+    border-bottom:2px solid rgba(176,141,63,.32);margin-bottom:14px}
+  .layer-head .emoji{font-size:20px}
+  .layer-head h2{font-family:var(--serif);margin:0;font-size:19px;font-weight:700;letter-spacing:.02em}
+  .layer-head .sub{color:var(--muted);font-size:13px}
+  .cards{display:grid;gap:12px}
+  .card{background:var(--card);border:1px solid var(--line);border-left:4px solid var(--line);
+    border-radius:12px;padding:15px 17px;box-shadow:0 1px 2px rgba(40,35,20,.04);
+    transition:box-shadow .15s,transform .15s}
+  .card.must{border-left-color:var(--must)}
+  .card.rec{border-left-color:var(--rec)}
+  .card.opt{border-left-color:var(--opt)}
+  .card:hover{box-shadow:0 6px 18px rgba(40,35,20,.09);transform:translateY(-1px)}
+  .card .top{display:flex;justify-content:space-between;align-items:flex-start;gap:10px}
+  .card .name{font-family:var(--serif);font-size:16.5px;font-weight:600;margin:0;letter-spacing:.01em}
+  .card .meta{color:var(--muted);font-size:13px;margin:3px 0 0}
+  .prilabel{display:inline-block;margin:0 0 5px;border-radius:4px;padding:2px 10px;
+    font-size:12px;font-weight:700;letter-spacing:.02em}
+  .prilabel.must{background:var(--gold);color:#fff}
+  .prilabel.rec{background:#e3ebf2;color:#3d5a74}
+  .prilabel.opt{background:#efece3;color:#6f6a5e}
+  .chips{display:flex;flex-wrap:wrap;gap:6px;margin-top:2px;justify-content:flex-end}
+  .chip{border-radius:4px;padding:2px 9px;font-size:12px;font-weight:600;white-space:nowrap}
+  .chip.type{background:var(--chip-type);color:var(--chip-type-ink)}
+  .chip.free{background:var(--chip-free);color:var(--chip-free-ink)}
+  .chip.pre{background:var(--chip-pre);color:var(--chip-pre-ink)}
+  .chip.diff{background:var(--chip-diff);color:var(--chip-diff-ink)}
+  .chip.aud{background:var(--chip-aud);color:var(--chip-aud-ink)}
+  .chip.ok{background:var(--chip-ok);color:var(--chip-ok-ink)}
+  .chip.warn{background:var(--chip-warn);color:var(--chip-warn-ink);cursor:help}
+  .card .reason{margin:9px 0 0;font-size:14px}
+  .card .foot{display:flex;flex-wrap:wrap;align-items:center;gap:8px;margin-top:11px}
+  .btn{margin-left:auto;display:inline-block;text-decoration:none;border:1px solid var(--accent);
+    color:var(--accent);border-radius:6px;padding:4px 12px;font-size:13px;font-weight:600}
+  .btn:hover{background:var(--accent);color:#fff}
+  /* 流程树（学习先后） */
+  .tree-hint{color:var(--muted);font-size:12.5px;margin:14px 2px 0}
+  .tree{position:relative;margin-top:10px;overflow-x:auto;padding:8px 2px 4px}
+  .tree-edges{position:absolute;top:0;left:0;pointer-events:none;z-index:0}
+  .tiers{position:relative;z-index:1;display:flex;flex-direction:column;gap:40px;
+    min-width:max-content;align-items:stretch}
+  .tier{display:flex;justify-content:center;gap:22px;flex-wrap:wrap}
+  .tnode{position:relative;display:block;background:var(--card);border:1px solid var(--line);
+    border-left:4px solid var(--line);border-radius:10px;padding:10px 14px;width:212px;
+    box-shadow:0 1px 2px rgba(40,35,20,.05);text-decoration:none;color:inherit;
+    transition:box-shadow .15s,transform .15s}
+  .tnode.must{border-left-color:var(--must)}
+  .tnode.rec{border-left-color:var(--rec)}
+  .tnode.opt{border-left-color:var(--opt)}
+  .tnode:hover{box-shadow:0 6px 16px rgba(40,35,20,.10);transform:translateY(-1px)}
+  .tnode .tn-name{font-family:var(--serif);font-size:14.5px;font-weight:600;line-height:1.35}
+  .tnode .tn-meta{color:var(--muted);font-size:12px;margin-top:4px;display:flex;gap:8px;flex-wrap:wrap}
+  .plan{background:linear-gradient(160deg,var(--hero1),var(--hero2));color:var(--hero-ink);
+    border:1px solid rgba(176,141,63,.28);border-radius:14px;
+    padding:24px 26px;margin-top:32px;box-shadow:0 8px 24px rgba(20,40,30,.20)}
+  .plan h2{font-family:var(--serif);margin:0 0 5px;font-size:17px;letter-spacing:.04em;color:#f5efe1}
+  .plan .hint{font-size:12px;opacity:.7;margin:0 0 12px}
+  .plan .progress{height:5px;border-radius:999px;background:rgba(176,141,63,.22);
+    overflow:hidden;margin:0 0 18px}
+  .plan .progress>i{display:block;height:100%;background:var(--gold);width:0;transition:width .25s}
+  .step{position:relative;padding-left:42px;padding-bottom:18px;cursor:pointer}
+  .step:last-child{padding-bottom:0}
+  .step::before{content:attr(data-n);position:absolute;left:0;top:0;width:28px;height:28px;
+    border-radius:50%;background:rgba(176,141,63,.22);border:1px solid rgba(176,141,63,.55);
+    color:#f5efe1;font-family:var(--serif);font-weight:700;font-size:13px;
+    text-align:center;line-height:27px;transition:background .15s}
+  .step.done::before{content:"✓";background:var(--gold);border-color:var(--gold);color:#1e3a32}
+  .step:not(:last-child)::after{content:"";position:absolute;left:13.5px;top:30px;bottom:0;
+    width:1px;background:rgba(176,141,63,.35)}
+  .step-title{font-weight:700;font-size:14.5px;margin:3px 0 4px;color:#f5efe1}
+  .step.done .step-title{text-decoration:line-through;opacity:.6}
+  .step-detail{font-size:13.5px;opacity:.9;white-space:pre-wrap}
+  .step.done .step-detail{opacity:.5}
+  .route{background:linear-gradient(160deg,var(--hero1),var(--hero2));color:var(--hero-ink);
+    border:1px solid rgba(176,141,63,.28);border-radius:14px;
+    padding:20px 22px;margin-top:30px;box-shadow:0 8px 24px rgba(20,40,30,.20)}
+  .route h2{font-family:var(--serif);margin:0 0 8px;font-size:16px;color:#f5efe1}
+  .route p{margin:0;font-size:14.5px;white-space:pre-wrap;opacity:.95}
+  /* 参考来源 */
+  .refs{background:var(--card);border:1px solid var(--line);border-radius:12px;
+    padding:18px 20px;margin-top:30px}
+  .refs h2{font-family:var(--serif);margin:0 0 4px;font-size:16px;letter-spacing:.02em}
+  .refs .refs-hint{margin:0 0 12px;font-size:12px;color:var(--muted)}
+  .refs ol{margin:0;padding-left:24px}
+  .refs li{font-size:13.5px;margin:0 0 9px;line-height:1.55;scroll-margin-top:16px}
+  .refs li:target{background:#fbf4df;border-radius:5px;box-shadow:0 0 0 6px #fbf4df}
+  .refs .ref-title{font-weight:600}
+  .refs .ref-src{color:var(--muted)}
+  .refs .ref-link{margin-left:8px;color:var(--accent);text-decoration:none;font-weight:600;font-size:12.5px}
+  .refs .ref-link:hover{text-decoration:underline}
+  .refs .ref-note{color:var(--muted)}
+  footer{margin-top:34px;text-align:center;color:var(--muted);font-size:12px}
+  footer code{background:#ece8dd;padding:1px 6px;border-radius:5px}
+  .empty{color:var(--muted);font-size:13px;font-style:italic}
+</style>
+</head>
+<body>
+<div class="wrap" id="app"></div>
+<script>
+const DATA = /*__PATH_DATA__*/;
+
+const PRI = {
+  "必读": {c:"must", t:"★ 必读"},
+  "推荐": {c:"rec",  t:"推荐"},
+  "可选": {c:"opt",  t:"可选"}
+};
+
+// 参考来源（顶层 references），在 render() 起始赋值；appendRich 据它解析正文 [n] 角标。
+let REFS = [];
+
+function el(tag, cls, text){
+  const e = document.createElement(tag);
+  if(cls) e.className = cls;
+  if(text != null) e.textContent = text;
+  return e;
+}
+function chip(cls, text){ return text ? el("span", "chip " + cls, text) : null; }
+function safeHttpUrl(value){
+  if(typeof value !== "string") return null;
+  try {
+    const url = new URL(value);
+    return (url.protocol === "http:" || url.protocol === "https:") ? url.href : null;
+  } catch (_) {
+    return null;
+  }
+}
+
+// 把含 [n] 角标的正文渲染进 parent：仅当第 n 条 reference 存在时才链到 #ref-n，否则原样保留为文字。
+// 纯 DOM 构造（textContent / createTextNode），不拼 innerHTML，杜绝 XSS。
+function appendRich(parent, text){
+  if(text == null) return;
+  const str = String(text);
+  const re = /\[(\d+)\]/g;
+  let last = 0, m;
+  while((m = re.exec(str)) !== null){
+    const n = parseInt(m[1], 10);
+    if(n >= 1 && n <= REFS.length){
+      if(m.index > last) parent.appendChild(document.createTextNode(str.slice(last, m.index)));
+      const sup = el("sup", "cite");
+      const a = el("a", null, "[" + n + "]");
+      a.href = "#ref-" + n;
+      sup.appendChild(a);
+      parent.appendChild(sup);
+      last = m.index + m[0].length;
+    }
+    // 无对应 reference：不前移 last，让该 [n] 留在后续文本块里照常显示
+  }
+  if(last < str.length) parent.appendChild(document.createTextNode(str.slice(last)));
+}
+function richP(cls, text){ const p = el("p", cls); appendRich(p, text); return p; }
+
+function renderCard(r){
+  const p = PRI[r.priority];
+  const card = el("div", "card" + (p ? (" " + p.c) : ""));
+  const top = el("div","top");
+  const left = el("div");
+  if(p) left.appendChild(el("span", "prilabel " + p.c, p.t));
+  left.appendChild(el("p","name", r.name || "(未命名)"));
+  if(r.meta) left.appendChild(el("p","meta", r.meta));
+  top.appendChild(left);
+  const tags = el("div","chips");
+  const t1 = chip("type", r.type); if(t1) tags.appendChild(t1);
+  // 反幻觉核实标记：只有显式 verified===true 才能标为已核实。
+  const ok = r.verified === true;
+  const vb = el("span", "chip " + (ok ? "ok" : "warn"), ok ? "✓ 已核实" : "⚠ 未核实");
+  if(!ok && r.verify_note) vb.setAttribute("title", r.verify_note);
+  tags.appendChild(vb);
+  if(r.free) tags.appendChild(chip("free","免费"));
+  top.appendChild(tags);
+  card.appendChild(top);
+
+  if(r.reason) card.appendChild(richP("reason", r.reason));
+
+  const foot = el("div","foot");
+  const pre = chip("pre", r.prereq ? ("前置：" + r.prereq) : null); if(pre) foot.appendChild(pre);
+  const d = chip("diff", r.difficulty ? ("难度：" + r.difficulty) : null); if(d) foot.appendChild(d);
+  const a = chip("aud", r.audience ? ("适合：" + r.audience) : null); if(a) foot.appendChild(a);
+  const resourceUrl = safeHttpUrl(r.url);
+  if(resourceUrl){
+    const b = el("a","btn","打开 ↗");
+    b.href = resourceUrl; b.target = "_blank"; b.rel = "noopener noreferrer";
+    foot.appendChild(b);
+  }
+  if(foot.childNodes.length) card.appendChild(foot);
+  return card;
+}
+
+function priRank(r){ return r.priority === "必读" ? 0 : r.priority === "推荐" ? 1 : 2; }
+
+function renderLayer(layer){
+  const sec = el("section","layer");
+  const head = el("div","layer-head");
+  if(layer.emoji) head.appendChild(el("span","emoji", layer.emoji));
+  head.appendChild(el("h2", null, layer.title || ""));
+  if(layer.subtitle) head.appendChild(el("span","sub", layer.subtitle));
+  sec.appendChild(head);
+  const cards = el("div","cards");
+  const list = (layer.resources || []).slice().sort((a,b)=>priRank(a)-priRank(b));
+  if(!list.length){ cards.appendChild(el("p","empty","（该层暂无合适资源）")); }
+  list.forEach(r => cards.appendChild(renderCard(r)));
+  sec.appendChild(cards);
+  return sec;
+}
+
+// ---- 流程树（学习先后 / 前后置依赖）----
+// 每个 resource 可带 id 与 requires:[id]（作为前置的其他资源）。只有参与依赖关系的资源进树。
+function buildGraph(data){
+  const byId = new Map();
+  (data.layers || []).forEach(layer => (layer.resources || []).forEach(r => {
+    if(r.id != null && r.id !== "") byId.set(r.id, r);
+  }));
+  const edges = [];   // {from: 前置 id, to: 后置 id}
+  byId.forEach((resource, id) => {
+    const reqs = resource.requires;
+    if(Array.isArray(reqs)) reqs.forEach(req => {
+      if(byId.has(req) && req !== id) edges.push({from: req, to: id});
+    });
+  });
+  const part = new Set();
+  edges.forEach(e => { part.add(e.from); part.add(e.to); });
+  return {byId, edges, part};
+}
+
+function computeTiers(part, edges){
+  const preds = new Map();
+  part.forEach(id => { preds.set(id, []); });
+  edges.forEach(e => { if(part.has(e.from) && part.has(e.to)) preds.get(e.to).push(e.from); });
+  const tier = new Map(), visiting = new Set();
+  function depth(id){
+    if(tier.has(id)) return tier.get(id);
+    if(visiting.has(id)) return 0;             // 环保护：遇到回边按 0 处理
+    visiting.add(id);
+    let d = 0;
+    preds.get(id).forEach(p => { d = Math.max(d, depth(p) + 1); });
+    visiting.delete(id);
+    tier.set(id, d);
+    return d;
+  }
+  part.forEach(id => depth(id));
+  return tier;
+}
+
+function renderTree(graph, container){
+  const {byId, edges, part} = graph;
+  const tierMap = computeTiers(part, edges);
+  let maxTier = 0;
+  part.forEach(id => { if(tierMap.get(id) > maxTier) maxTier = tierMap.get(id); });
+
+  const svgNS = "http://www.w3.org/2000/svg";
+  const svg = document.createElementNS(svgNS, "svg");
+  svg.setAttribute("class", "tree-edges");
+  const defs = document.createElementNS(svgNS, "defs");
+  const marker = document.createElementNS(svgNS, "marker");
+  marker.setAttribute("id", "kc-arrow");
+  marker.setAttribute("markerWidth", "9"); marker.setAttribute("markerHeight", "9");
+  marker.setAttribute("refX", "7"); marker.setAttribute("refY", "3");
+  marker.setAttribute("orient", "auto"); marker.setAttribute("markerUnits", "userSpaceOnUse");
+  const mpath = document.createElementNS(svgNS, "path");
+  mpath.setAttribute("d", "M0,0 L7,3 L0,6 Z"); mpath.setAttribute("fill", "#b08d3f");
+  marker.appendChild(mpath); defs.appendChild(marker); svg.appendChild(defs);
+  container.appendChild(svg);
+
+  const tiers = el("div","tiers");
+  const rows = [];
+  for(let t = 0; t <= maxTier; t++){ rows[t] = el("div","tier"); }
+  const nodeEls = new Map();
+  part.forEach(id => {
+    const r = byId.get(id);
+    const pr = PRI[r.priority];
+    const resourceUrl = safeHttpUrl(r.url);
+    const node = el(resourceUrl ? "a" : "div", "tnode" + (pr ? " " + pr.c : ""));
+    if(resourceUrl){ node.href = resourceUrl; node.target = "_blank"; node.rel = "noopener noreferrer"; }
+    node.appendChild(el("div","tn-name", r.name || id));
+    const meta = el("div","tn-meta");
+    if(r.type) meta.appendChild(el("span", null, r.type));
+    if(pr) meta.appendChild(el("span", null, pr.t));
+    if(meta.childNodes.length) node.appendChild(meta);
+    nodeEls.set(id, node);
+    rows[tierMap.get(id) || 0].appendChild(node);
+  });
+  rows.forEach(row => { if(row.childNodes.length) tiers.appendChild(row); });
+  container.appendChild(tiers);
+
+  function draw(){
+    Array.prototype.slice.call(svg.querySelectorAll("path.edge")).forEach(p => p.remove());
+    const crect = container.getBoundingClientRect();
+    const w = container.scrollWidth, h = container.scrollHeight;
+    svg.setAttribute("width", w); svg.setAttribute("height", h);
+    svg.setAttribute("viewBox", "0 0 " + w + " " + h);
+    edges.forEach(e => {
+      const fe = nodeEls.get(e.from), te = nodeEls.get(e.to);
+      if(!fe || !te) return;
+      const a = fe.getBoundingClientRect(), b = te.getBoundingClientRect();
+      const x1 = a.left - crect.left + container.scrollLeft + a.width / 2;
+      const y1 = a.bottom - crect.top + container.scrollTop;
+      const x2 = b.left - crect.left + container.scrollLeft + b.width / 2;
+      const y2 = b.top - crect.top + container.scrollTop;
+      const my = (y1 + y2) / 2;
+      const path = document.createElementNS(svgNS, "path");
+      path.setAttribute("class", "edge");
+      path.setAttribute("d", "M" + x1 + "," + y1 + " C" + x1 + "," + my + " " + x2 + "," + my + " " + x2 + "," + (y2 - 7));
+      path.setAttribute("fill", "none");
+      path.setAttribute("stroke", "rgba(176,141,63,.62)");
+      path.setAttribute("stroke-width", "1.6");
+      path.setAttribute("marker-end", "url(#kc-arrow)");
+      svg.appendChild(path);
+    });
+  }
+  return draw;
+}
+
+function makeToggle(layersView, treeView, onShowTree){
+  const wrap = el("div","viewtoggle");
+  const b1 = el("button", "on", "📚 分层视图");
+  const b2 = el("button", null, "🌳 学习路线树");
+  function show(tree){
+    layersView.style.display = tree ? "none" : "";
+    treeView.style.display = tree ? "" : "none";
+    b1.classList.toggle("on", !tree);
+    b2.classList.toggle("on", tree);
+    if(tree && onShowTree) requestAnimationFrame(onShowTree);   // 可见后才有布局，此时再画连线
+  }
+  b1.addEventListener("click", ()=>show(false));
+  b2.addEventListener("click", ()=>show(true));
+  wrap.appendChild(b1); wrap.appendChild(b2);
+  return wrap;
+}
+
+function renderPlan(plan, storageKey){
+  const box = el("div","plan");
+  box.appendChild(el("h2", null, "📋 分阶段学习计划"));
+  box.appendChild(el("p","hint","点击任一阶段标记完成 · 进度自动记在本浏览器"));
+  const prog = el("div","progress"); const bar = el("i"); prog.appendChild(bar); box.appendChild(prog);
+  const keyFor = (i)=>"knowledge-compass:"+(storageKey||"")+":step:"+i;
+  const readProgress = (key)=>{ try { return localStorage.getItem(key); } catch (_) { return null; } };
+  const writeProgress = (key,value)=>{ try { localStorage.setItem(key,value); } catch (_) {} };
+  function refresh(){
+    let done = 0;
+    plan.forEach((_,i)=>{ if(readProgress(keyFor(i))==="1") done++; });
+    bar.style.width = Math.round(done/(plan.length||1)*100) + "%";
+  }
+  plan.forEach((s, i) => {
+    const step = el("div","step");
+    step.setAttribute("data-n", String(i + 1));
+    if(readProgress(keyFor(i))==="1") step.classList.add("done");
+    if(s.step || s.title) step.appendChild(el("div","step-title", s.step || s.title));
+    if(s.detail){ const det = el("div","step-detail"); appendRich(det, s.detail); step.appendChild(det); }
+    step.addEventListener("click", ()=>{
+      const now = step.classList.toggle("done");
+      writeProgress(keyFor(i), now ? "1" : "0");
+      refresh();
+    });
+    box.appendChild(step);
+  });
+  refresh();
+  return box;
+}
+
+function renderReferences(refs){
+  const box = el("section","refs");
+  box.appendChild(el("h2", null, "参考来源"));
+  box.appendChild(el("p","refs-hint","正文 [n] 角标对应下列条目 · 均为本指南分析所依据的可溯出处"));
+  const ol = el("ol");
+  refs.forEach((r, i) => {
+    const li = el("li"); li.id = "ref-" + (i + 1);
+    li.appendChild(el("span","ref-title", r.title || r.name || ("来源 " + (i + 1))));
+    if(r.source) li.appendChild(el("span","ref-src", " · " + r.source));
+    const referenceUrl = safeHttpUrl(r.url);
+    if(referenceUrl){
+      const a = el("a","ref-link","链接 ↗");
+      a.href = referenceUrl; a.target = "_blank"; a.rel = "noopener noreferrer";
+      li.appendChild(a);
+    }
+    if(r.note) li.appendChild(el("span","ref-note", " — " + r.note));
+    ol.appendChild(li);
+  });
+  box.appendChild(ol);
+  return box;
+}
+
+function infoCard(cls, title, text){
+  const c = el("div", "info" + (cls ? (" " + cls) : ""));
+  c.appendChild(el("h2", null, title));
+  c.appendChild(richP(null, text));
+  return c;
+}
+
+function render(data){
+  const app = document.getElementById("app");
+  REFS = Array.isArray(data.references) ? data.references : [];
+
+  const hero = el("header","hero");
+  if(data.domain) hero.appendChild(el("div","kicker", data.domain));   // 领域眉题：直接点明反推出的领域+分支
+  hero.appendChild(el("h1", null, data.topic || "领域指南"));
+  if(Array.isArray(data.fragments) && data.fragments.length){
+    const fr = el("div","frags");
+    data.fragments.forEach(f => fr.appendChild(el("span","frag", f)));
+    hero.appendChild(fr);
+  }
+  if(data.domain_judgment) hero.appendChild(richP("judgment", data.domain_judgment));
+  // 置信度 + 排除/不匹配（compass 的反幻觉判定，融进 hero）
+  const vl = el("div","verdict-line");
+  if(data.confidence) vl.appendChild(el("span","conf","置信度 " + data.confidence));
+  if(data.excluded){
+    const ex = el("span","excluded");
+    ex.appendChild(document.createTextNode("未纳入："));
+    appendRich(ex, data.excluded);
+    vl.appendChild(ex);
+  }
+  if(vl.childNodes.length) hero.appendChild(vl);
+  if(Array.isArray(data.disciplines) && data.disciplines.length){
+    const dr = el("div","disc-row");
+    dr.appendChild(el("span","lab","📚 学科归属"));
+    data.disciplines.forEach(d => dr.appendChild(el("span","disc", d)));
+    hero.appendChild(dr);
+  }
+  app.appendChild(hero);
+
+  // 优先级图例
+  const lg = el("div","legend");
+  [["must","★ 必读 · 绕不开"],["rec","推荐 · 很好的补充"],["opt","可选 · 按需取用"]].forEach(([c,txt])=>{
+    const s = el("span");
+    const d = el("span","dot"); d.style.background = "var(--" + c + ")";
+    s.appendChild(d); s.appendChild(el("span", null, txt));
+    lg.appendChild(s);
+  });
+  app.appendChild(lg);
+
+  if(data.overview) app.appendChild(infoCard(null, "领域速览", data.overview));
+  if(data.prerequisites) app.appendChild(infoCard("prereqs", "🎒 开始之前 · 前置知识", data.prerequisites));
+
+  // 两种视图：默认分层视图，资源间存在前后置依赖时提供「学习路线树」切换
+  const graph = buildGraph(data);
+  const hasTree = graph.edges.length > 0;
+
+  const layersView = el("div"); layersView.id = "layers-view";
+  (data.layers || []).forEach(l => layersView.appendChild(renderLayer(l)));
+
+  let treeView = null, drawEdges = null;
+  if(hasTree){
+    treeView = el("div"); treeView.id = "tree-view"; treeView.style.display = "none";
+    treeView.appendChild(el("p","tree-hint","按学习先后排布：顶层可任意起步，箭头指向应在其之后学习的资源。"));
+    const tree = el("div","tree");
+    drawEdges = renderTree(graph, tree);
+    treeView.appendChild(tree);
+    app.appendChild(makeToggle(layersView, treeView, ()=>{ if(drawEdges) drawEdges(); }));
+  }
+  app.appendChild(layersView);
+  if(treeView){
+    app.appendChild(treeView);
+    window.addEventListener("resize", ()=>{
+      if(treeView.style.display !== "none" && drawEdges) drawEdges();
+    });
+  }
+
+  if(Array.isArray(data.plan) && data.plan.length){
+    app.appendChild(renderPlan(data.plan, data._storage_key || data.topic));
+  } else if(data.route){
+    const rt = el("div","route");
+    rt.appendChild(el("h2", null, "🧭 一条建议路线"));
+    rt.appendChild(richP(null, data.route));
+    app.appendChild(rt);
+  }
+
+  if(REFS.length) app.appendChild(renderReferences(REFS));
+
+  const ft = el("footer");
+  ft.appendChild(document.createTextNode("由 "));
+  ft.appendChild(el("code", null, "knowledge-compass"));
+  ft.appendChild(document.createTextNode(" 生成 · 核实状态以每条来源徽章为准"));
+  app.appendChild(ft);
+
+  if(data.topic) document.title = data.topic + " · 领域指南";
+}
+
+render(DATA);
+</script>
+</body>
+</html>
