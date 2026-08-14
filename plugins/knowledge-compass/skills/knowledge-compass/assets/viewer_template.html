@@ -18,6 +18,8 @@
     --chip-ok:#e7efe9; --chip-ok-ink:#2f5a4a;
     --chip-warn:#f7ece0; --chip-warn-ink:#9a6a2e;
     --must:#b08d3f; --rec:#9bb0c4; --opt:#d8d3c6;
+    --atlas-fog:#eaf0ee;--deep-spruce:#153a35;--meridian-teal:#2f6f68;
+    --signal-coral:#dc6a50;--atlas-ink:#1f2926;--atlas-paper:#fbfdfc;
   }
   *{box-sizing:border-box}
   body{margin:0;background:var(--bg);color:var(--ink);
@@ -159,12 +161,108 @@
   footer{margin-top:34px;text-align:center;color:var(--muted);font-size:12px}
   footer code{background:#ece8dd;padding:1px 6px;border-radius:5px}
   .empty{color:var(--muted);font-size:13px;font-style:italic}
+
+  /* 零安装入口：离线罗盘校准台。仅原始模板打开时呈现。 */
+  .sr-only{position:absolute!important;width:1px!important;height:1px!important;padding:0!important;
+    margin:-1px!important;overflow:hidden!important;clip:rect(0,0,0,0)!important;
+    white-space:nowrap!important;border:0!important}
+  body.import-mode{background:var(--atlas-fog);color:var(--atlas-ink)}
+  body.import-mode .wrap{max-width:1120px;padding:26px 24px 56px}
+  .calibration-shell{min-height:calc(100vh - 82px);display:flex;flex-direction:column}
+  .calibration-head{display:flex;align-items:center;justify-content:space-between;gap:20px;
+    padding:4px 2px 22px;border-bottom:1px solid rgba(21,58,53,.16)}
+  .calibration-brand{display:flex;align-items:baseline;gap:12px;color:var(--deep-spruce)}
+  .calibration-brand strong{font-family:"Iowan Old Style",Georgia,"Songti SC",serif;
+    font-size:20px;letter-spacing:.02em}
+  .calibration-brand span,.privacy-note{font:600 11px/1.4 ui-monospace,SFMono-Regular,Menlo,monospace;
+    letter-spacing:.08em;text-transform:uppercase;color:var(--meridian-teal)}
+  .privacy-note{display:inline-flex;align-items:center;gap:8px;text-transform:none;letter-spacing:.02em}
+  .privacy-note::before{content:"";width:7px;height:7px;border-radius:50%;background:var(--meridian-teal);
+    box-shadow:0 0 0 4px rgba(47,111,104,.12)}
+  .calibration-grid{display:grid;grid-template-columns:minmax(0,1.2fr) minmax(280px,.8fr);
+    gap:48px;align-items:center;flex:1;padding:46px 0 34px}
+  .calibration-copy .eyebrow{margin:0 0 10px;color:var(--signal-coral);
+    font:700 12px/1.4 ui-monospace,SFMono-Regular,Menlo,monospace;letter-spacing:.13em}
+  .calibration-copy h1{margin:0;max-width:650px;color:var(--deep-spruce);
+    font-family:"Iowan Old Style",Georgia,"Songti SC",serif;font-size:clamp(34px,5vw,62px);
+    font-weight:600;line-height:1.08;letter-spacing:-.025em}
+  .calibration-copy .lead{max-width:620px;margin:18px 0 28px;color:#42615c;font-size:16px}
+  .dropzone{position:relative;min-height:300px;display:flex;align-items:center;justify-content:center;
+    flex-direction:column;gap:14px;padding:34px;border:2px dashed rgba(47,111,104,.46);
+    border-radius:24px;background:rgba(251,253,252,.72);cursor:pointer;text-align:center;
+    box-shadow:0 20px 60px rgba(21,58,53,.08);transition:border-color .2s,background .2s,transform .2s}
+  .dropzone:hover,.dropzone.is-dragging{border-color:var(--signal-coral);background:var(--atlas-paper);
+    transform:translateY(-2px)}
+  .dropzone:focus-visible,.calibration-button:focus-visible,.toolbar-button:focus-visible,
+  .viewtoggle button:focus-visible,.step:focus-visible{outline:3px solid var(--signal-coral);outline-offset:4px}
+  .compass{position:relative;width:112px;height:112px;border:1px solid rgba(47,111,104,.5);
+    border-radius:50%;background:radial-gradient(circle at center,transparent 0 9%,rgba(47,111,104,.1) 10% 11%,
+    transparent 12% 47%,rgba(47,111,104,.1) 48% 49%,transparent 50%);box-shadow:inset 0 0 0 10px rgba(47,111,104,.04)}
+  .compass::before,.compass::after{content:"";position:absolute;background:rgba(47,111,104,.28)}
+  .compass::before{width:1px;height:82%;left:50%;top:9%}
+  .compass::after{height:1px;width:82%;left:9%;top:50%}
+  .compass-needle{position:absolute;z-index:1;left:50%;top:50%;width:18px;height:80px;
+    transform:translate(-50%,-50%) rotate(24deg);transition:transform .32s cubic-bezier(.2,.8,.2,1)}
+  .compass-needle::before,.compass-needle::after{content:"";position:absolute;left:1px;border-left:8px solid transparent;
+    border-right:8px solid transparent}
+  .compass-needle::before{top:0;border-bottom:36px solid var(--signal-coral)}
+  .compass-needle::after{bottom:0;border-top:36px solid var(--deep-spruce)}
+  .dropzone.is-dragging .compass-needle{transform:translate(-50%,-50%) rotate(66deg)}
+  .drop-title{margin:4px 0 0;color:var(--deep-spruce);font-size:19px;font-weight:750}
+  .drop-help{margin:0;color:#58706c;font-size:13px}
+  .calibration-button,.toolbar-button{min-height:44px;border:0;border-radius:10px;padding:10px 18px;
+    background:var(--deep-spruce);color:#fff;font-family:inherit;font-size:14px;font-weight:700;line-height:1.4;cursor:pointer}
+  .calibration-button:hover,.toolbar-button:hover{background:var(--meridian-teal)}
+  .steps-panel{padding:8px 0}
+  .steps-panel h2{margin:0 0 18px;color:var(--deep-spruce);font-size:13px;letter-spacing:.08em}
+  .calibration-steps{list-style:none;margin:0;padding:0;display:grid;gap:12px}
+  .calibration-steps li{display:grid;grid-template-columns:46px 1fr;gap:14px;align-items:start;
+    padding:15px 0;border-bottom:1px solid rgba(21,58,53,.14)}
+  .step-number{color:var(--signal-coral);font:700 12px/1.5 ui-monospace,SFMono-Regular,Menlo,monospace;
+    letter-spacing:.1em}
+  .calibration-steps strong{display:block;color:var(--deep-spruce);font-size:15px}
+  .calibration-steps p{margin:3px 0 0;color:#58706c;font-size:13px}
+  .import-status{min-height:48px;margin-top:20px;padding:12px 14px;border-left:3px solid var(--meridian-teal);
+    background:rgba(251,253,252,.75);color:#3e5b56;font-size:13px;white-space:pre-wrap}
+  .import-status.error{border-left-color:var(--signal-coral);color:#7d382b;background:#fff7f5}
+  .import-foot{margin:0;color:#66807b;font:500 11px/1.6 ui-monospace,SFMono-Regular,Menlo,monospace}
+  .portable-toolbar{position:sticky;z-index:5;top:10px;display:flex;align-items:center;gap:12px;
+    margin:0 0 18px;padding:10px 12px;border:1px solid rgba(21,58,53,.17);border-radius:12px;
+    background:rgba(251,253,252,.94);box-shadow:0 10px 28px rgba(21,58,53,.12);backdrop-filter:blur(8px)}
+  .portable-toolbar .toolbar-status{min-width:0;margin-right:auto;color:var(--deep-spruce);font-size:13px}
+  .portable-toolbar .toolbar-status strong{display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .portable-toolbar .toolbar-status span{color:#66807b;font-size:11px}
+  .toolbar-button.secondary{border:1px solid rgba(21,58,53,.28);background:transparent;color:var(--deep-spruce)}
+  .toolbar-button.secondary:hover{background:var(--atlas-fog)}
+  .toolbar-button:disabled{cursor:not-allowed;opacity:.48}
+  @media(max-width:760px){
+    body.import-mode .wrap{padding:18px 16px 42px}
+    .calibration-head{align-items:flex-start;flex-direction:column;gap:8px;padding-bottom:16px}
+    .calibration-grid{grid-template-columns:1fr;gap:28px;padding:30px 0 24px}
+    .dropzone{min-height:264px;padding:26px 18px}.steps-panel{padding:0}
+    .portable-toolbar{position:static;align-items:stretch;flex-wrap:wrap}
+    .portable-toolbar .toolbar-status{flex:1 1 100%}.toolbar-button{flex:1}
+  }
+  @media(prefers-reduced-motion:reduce){
+    *,*::before,*::after{scroll-behavior:auto!important;transition-duration:.01ms!important;animation-duration:.01ms!important}
+    .dropzone:hover,.dropzone.is-dragging{transform:none}
+    .dropzone.is-dragging .compass-needle{transform:translate(-50%,-50%) rotate(24deg)}
+  }
 </style>
 </head>
 <body>
 <div class="wrap" id="app"></div>
+<script id="kc-guide-data" type="application/json">/*__PATH_DATA__*/</script>
 <script>
-const DATA = /*__PATH_DATA__*/;
+"use strict";
+
+const DATA_MARKER = "/" + "*__PATH_DATA__*" + "/";
+const MAX_JSON_BYTES = 5 * 1024 * 1024;
+let CURRENT_DATA = null;
+let CURRENT_FILE_NAME = "";
+let ROUTE_RESIZE_HANDLER = null;
+let EXPORT_SKELETON = null;
+let IMPORT_SEQUENCE = 0;
 
 const PRI = {
   "必读": {c:"must", t:"★ 必读"},
@@ -182,14 +280,468 @@ function el(tag, cls, text){
   return e;
 }
 function chip(cls, text){ return text ? el("span", "chip " + cls, text) : null; }
+function hasUnsafeControl(value){
+  if(typeof value !== "string") return false;
+  for(let i = 0; i < value.length; i++){
+    const code = value.charCodeAt(i);
+    if(code <= 0x1f || (code >= 0x7f && code <= 0x9f)) return true;
+    if(code >= 0xd800 && code <= 0xdbff){
+      const next = value.charCodeAt(i + 1);
+      if(!(next >= 0xdc00 && next <= 0xdfff)) return true;
+      i++;
+    } else if(code >= 0xdc00 && code <= 0xdfff){
+      return true;
+    }
+  }
+  return false;
+}
+function isValidWebHostname(value){
+  if(!value || value.includes("%")) return false;
+  const hostname = value.endsWith(".") ? value.slice(0,-1) : value;
+  if(!hostname || Array.from(hostname).length > 253) return false;
+  const labels = hostname.split(".");
+  if(labels.some(label => !label || Array.from(label).length > 63)) return false;
+  if(/^[0-9.]+$/.test(hostname)){
+    return labels.length === 4 && labels.every(label =>
+      /^[0-9]+$/.test(label) && (label === "0" || !label.startsWith("0")) && Number(label) <= 255
+    );
+  }
+  return labels.every(label => /^[\p{L}\p{M}\p{N}_-]+$/u.test(label));
+}
+function isSafeWebUrl(value){
+  if(typeof value !== "string" || !value.trim() || hasUnsafeControl(value) || value.includes("\uFEFF")) return false;
+  const trimmed = value.trim();
+  // This explicit, conservative grammar is mirrored in view_field_guide.py.
+  // Do not delegate acceptance to WHATWG/urllib: their malformed-host behavior differs.
+  if(/[\s\\]/u.test(trimmed)) return false;
+  const scheme = /^https?:\/\//i.exec(trimmed);
+  if(!scheme) return false;
+  const remainder = trimmed.slice(scheme[0].length);
+  const boundary = remainder.search(/[/?#]/);
+  const authority = boundary < 0 ? remainder : remainder.slice(0,boundary);
+  if(!authority || /[<>"`{}|^]/u.test(authority)) return false;
+  const hostPort = authority.slice(authority.lastIndexOf("@") + 1);
+  if(!hostPort) return false;
+
+  let hostname, port = null;
+  if(hostPort.startsWith("[")){
+    const close = hostPort.indexOf("]");
+    if(close <= 1) return false;
+    hostname = hostPort.slice(1,close);
+    if(hostname.includes("%")) return false;
+    const tail = hostPort.slice(close + 1);
+    if(tail && !tail.startsWith(":")) return false;
+    port = tail ? tail.slice(1) : null;
+    try {
+      const parsed = new URL("http://[" + hostname + "]/" );
+      if(!parsed.hostname) return false;
+    } catch (_) {
+      return false;
+    }
+  } else {
+    const colon = hostPort.lastIndexOf(":");
+    if(colon >= 0){
+      hostname = hostPort.slice(0,colon);
+      port = hostPort.slice(colon + 1);
+      if(hostname.includes(":")) return false;
+    } else {
+      hostname = hostPort;
+    }
+    if(!isValidWebHostname(hostname)) return false;
+  }
+  return port === null || (/^[0-9]+$/.test(port) && Number(port) <= 65535);
+}
 function safeHttpUrl(value){
-  if(typeof value !== "string") return null;
+  if(!isSafeWebUrl(value)) return null;
   try {
-    const url = new URL(value);
-    return (url.protocol === "http:" || url.protocol === "https:") ? url.href : null;
+    return new URL(value.trim()).href;
   } catch (_) {
     return null;
   }
+}
+
+function isRecord(value){
+  return value !== null && typeof value === "object" && !Array.isArray(value);
+}
+
+function isValidResourceId(value){
+  return typeof value === "string" && /^[a-z0-9][a-z0-9._-]{0,63}$/.test(value) &&
+    value !== "__proto__" && value !== "prototype" && value !== "constructor";
+}
+
+// 浏览器信任边界：与 scripts/view_field_guide.py:validate_guide 保持同一接受/拒绝语义。
+function validateGuideInBrowser(data){
+  const errors = [];
+  if(!isRecord(data)) return ["top level must be a JSON object"];
+
+  if(typeof data.topic !== "string" || !data.topic.trim()){
+    errors.push("topic must be a non-empty string");
+  } else if(hasUnsafeControl(data.topic)){
+    errors.push("topic must not contain control characters");
+  }
+
+  ["domain","domain_judgment","confidence","excluded","overview","prerequisites","route"].forEach(key => {
+    if(Object.prototype.hasOwnProperty.call(data, key) && typeof data[key] !== "string"){
+      errors.push(key + " must be a string");
+    }
+  });
+
+  if(!Array.isArray(data.layers) || data.layers.length === 0){
+    errors.push("layers must be a non-empty array");
+    return errors;
+  }
+
+  const resourceIds = new Map();
+  const dependencies = [];
+  data.layers.forEach((layer, layerIndex) => {
+    const layerPath = "layers[" + layerIndex + "]";
+    if(!isRecord(layer)){
+      errors.push(layerPath + " must be an object");
+      return;
+    }
+    ["emoji","title","subtitle"].forEach(key => {
+      if(Object.prototype.hasOwnProperty.call(layer, key) && typeof layer[key] !== "string"){
+        errors.push(layerPath + "." + key + " must be a string");
+      }
+    });
+    if(!Array.isArray(layer.resources)){
+      errors.push(layerPath + ".resources must be an array");
+      return;
+    }
+    layer.resources.forEach((resource, resourceIndex) => {
+      const resourcePath = layerPath + ".resources[" + resourceIndex + "]";
+      if(!isRecord(resource)){
+        errors.push(resourcePath + " must be an object");
+        return;
+      }
+      if(Object.prototype.hasOwnProperty.call(resource, "url") && !isSafeWebUrl(resource.url)){
+        errors.push(resourcePath + ".url must be an absolute http(s) URL");
+      }
+      if(Object.prototype.hasOwnProperty.call(resource, "verified") && typeof resource.verified !== "boolean"){
+        errors.push(resourcePath + ".verified must be true or false");
+      }
+      if(Object.prototype.hasOwnProperty.call(resource, "free") && typeof resource.free !== "boolean"){
+        errors.push(resourcePath + ".free must be true or false");
+      }
+      ["name","meta","type","priority","prereq","reason","difficulty","audience","verify_note"].forEach(key => {
+        if(Object.prototype.hasOwnProperty.call(resource, key) && typeof resource[key] !== "string"){
+          errors.push(resourcePath + "." + key + " must be a string");
+        }
+      });
+      if(resource.priority != null && resource.priority !== "必读" && resource.priority !== "推荐" && resource.priority !== "可选"){
+        errors.push(resourcePath + ".priority must be 必读, 推荐, or 可选");
+      }
+
+      const resourceId = resource.id;
+      let resourceIdValid = resourceId == null;
+      if(resourceId != null){
+        if(!isValidResourceId(resourceId)){
+          errors.push(resourcePath + ".id must use 1-64 lowercase letters, digits, '.', '_' or '-' and must not be a reserved object key");
+        } else if(resourceIds.has(resourceId)){
+          errors.push(resourcePath + ".id duplicates " + resourceIds.get(resourceId) + ": " + resourceId);
+        } else {
+          resourceIds.set(resourceId, resourcePath + ".id");
+          resourceIdValid = true;
+        }
+      }
+
+      const requires = Object.prototype.hasOwnProperty.call(resource,"requires") ? resource.requires : [];
+      if(!Array.isArray(requires) || requires.some(item => !isValidResourceId(item))){
+        errors.push(resourcePath + ".requires must be an array of valid, non-reserved resource ids");
+      } else if(resourceIdValid && typeof resourceId === "string"){
+        dependencies.push({id:resourceId, requires:requires, path:resourcePath});
+      } else if(requires.length){
+        errors.push(resourcePath + ".id is required when requires is non-empty");
+      }
+    });
+  });
+
+  dependencies.forEach(item => {
+    item.requires.forEach(requiredId => {
+      if(requiredId === item.id){
+        errors.push(item.path + ".requires cannot reference itself: " + item.id);
+      } else if(!resourceIds.has(requiredId)){
+        errors.push(item.path + ".requires references unknown id: " + requiredId);
+      }
+    });
+  });
+
+  const dependencyMap = new Map(dependencies.map(item => [item.id, item.requires]));
+  const visiting = new Set();
+  const visited = new Set();
+  function visit(resourceId, trail){
+    if(visiting.has(resourceId)){
+      errors.push("requires contains a cycle: " + trail.concat([resourceId]).join(" -> "));
+      return;
+    }
+    if(visited.has(resourceId)) return;
+    visiting.add(resourceId);
+    (dependencyMap.get(resourceId) || []).forEach(requiredId => {
+      if(dependencyMap.has(requiredId)) visit(requiredId, trail.concat([resourceId]));
+    });
+    visiting.delete(resourceId);
+    visited.add(resourceId);
+  }
+  dependencyMap.forEach((_, resourceId) => visit(resourceId, []));
+
+  const references = Object.prototype.hasOwnProperty.call(data,"references") ? data.references : [];
+  if(!Array.isArray(references)){
+    errors.push("references must be an array");
+  } else {
+    references.forEach((reference, index) => {
+      const path = "references[" + index + "]";
+      if(!isRecord(reference)){
+        errors.push(path + " must be an object");
+        return;
+      }
+      if(Object.prototype.hasOwnProperty.call(reference, "url") && !isSafeWebUrl(reference.url)){
+        errors.push(path + ".url must be an absolute http(s) URL");
+      }
+      ["title","name","source","note"].forEach(key => {
+        if(Object.prototype.hasOwnProperty.call(reference, key) && typeof reference[key] !== "string"){
+          errors.push(path + "." + key + " must be a string");
+        }
+      });
+    });
+  }
+
+  const plan = Object.prototype.hasOwnProperty.call(data,"plan") ? data.plan : [];
+  if(!Array.isArray(plan)){
+    errors.push("plan must be an array");
+  } else {
+    plan.forEach((step, index) => {
+      if(!isRecord(step)){
+        errors.push("plan[" + index + "] must be an object");
+        return;
+      }
+      ["step","title","detail"].forEach(key => {
+        if(Object.prototype.hasOwnProperty.call(step, key) && typeof step[key] !== "string"){
+          errors.push("plan[" + index + "]." + key + " must be a string");
+        }
+      });
+    });
+  }
+
+  ["fragments","disciplines"].forEach(key => {
+    const value = Object.prototype.hasOwnProperty.call(data,key) ? data[key] : [];
+    if(!Array.isArray(value) || value.some(item => typeof item !== "string")){
+      errors.push(key + " must be an array of strings");
+    }
+  });
+  return errors;
+}
+
+function canonicalJson(value){
+  if(Array.isArray(value)) return "[" + value.map(canonicalJson).join(",") + "]";
+  if(isRecord(value)){
+    return "{" + Object.keys(value).sort().map(key => JSON.stringify(key) + ":" + canonicalJson(value[key])).join(",") + "}";
+  }
+  return JSON.stringify(value);
+}
+
+function browserStorageKey(data){
+  const clean = Object.create(null);
+  Object.keys(data).forEach(key => { if(key !== "_storage_key") clean[key] = data[key]; });
+  const source = canonicalJson(clean);
+  let left = 0x811c9dc5, right = 0x9e3779b9;
+  for(let i = 0; i < source.length; i++){
+    const code = source.charCodeAt(i);
+    left = Math.imul(left ^ code, 0x01000193) >>> 0;
+    right = Math.imul(right ^ (code + i), 0x85ebca6b) >>> 0;
+  }
+  // butler-min: 该 64-bit 非加密组合哈希只隔离本地进度；若观察到真实碰撞或用于身份/安全边界，升级为 SHA-256。
+  return "browser-" + left.toString(16).padStart(8,"0") + right.toString(16).padStart(8,"0");
+}
+
+function jsonForHtml(data){
+  return JSON.stringify(data).replace(/&/g,"\\u0026").replace(/</g,"\\u003c").replace(/>/g,"\\u003e")
+    .replace(/\u2028/g,"\\u2028").replace(/\u2029/g,"\\u2029");
+}
+
+function resetRenderSurface(){
+  if(ROUTE_RESIZE_HANDLER){
+    window.removeEventListener("resize", ROUTE_RESIZE_HANDLER);
+    ROUTE_RESIZE_HANDLER = null;
+  }
+  REFS = [];
+  document.getElementById("app").replaceChildren();
+}
+
+function formatImportError(error){
+  if(error && error.name === "EncodingError") return "文件不是有效的 UTF-8 文本。请重新导出 JSON 后再试。";
+  return error && error.message ? error.message : "读取文件时发生未知错误，请重新选择。";
+}
+
+function renderImporter(message, isError){
+  CURRENT_DATA = null;
+  CURRENT_FILE_NAME = "";
+  resetRenderSurface();
+  document.body.classList.add("import-mode");
+  document.title = "离线罗盘校准台 · knowledge-compass";
+  const app = document.getElementById("app");
+  const shell = el("main","calibration-shell");
+
+  const head = el("header","calibration-head");
+  const brand = el("div","calibration-brand");
+  brand.appendChild(el("strong",null,"Knowledge Compass"));
+  brand.appendChild(el("span",null,"Offline Viewer"));
+  head.appendChild(brand);
+  head.appendChild(el("div","privacy-note","数据只在本机处理，不会上传"));
+  shell.appendChild(head);
+
+  const grid = el("div","calibration-grid");
+  const copy = el("section","calibration-copy");
+  copy.appendChild(el("p","eyebrow","NO PYTHON · NO INSTALL · 纯离线"));
+  copy.appendChild(el("h1",null,"把知识 JSON 装进你的离线罗盘"));
+  copy.appendChild(el("p","lead","选择刚生成的指南 JSON。页面会在本机检查内容、生成完整预览，并让你导出一个可单独保存和分享的 HTML。"));
+
+  const input = el("input","sr-only");
+  input.type = "file"; input.id = "guide-file"; input.accept = ".json,application/json";
+  input.tabIndex = -1; input.setAttribute("aria-hidden","true");
+  const zone = el("label","dropzone");
+  zone.htmlFor = input.id; zone.tabIndex = 0; zone.setAttribute("role","button");
+  zone.setAttribute("aria-describedby","drop-help");
+  const compass = el("span","compass");
+  compass.setAttribute("aria-hidden","true"); compass.appendChild(el("span","compass-needle"));
+  zone.appendChild(compass);
+  zone.appendChild(el("p","drop-title","拖入 JSON，或从电脑中选择"));
+  const help = el("p","drop-help","只接受 knowledge-compass JSON · 最大 5 MB"); help.id = "drop-help";
+  zone.appendChild(help);
+  zone.appendChild(el("span","calibration-button","选择 JSON 文件"));
+  copy.appendChild(input); copy.appendChild(zone);
+  grid.appendChild(copy);
+
+  const panel = el("aside","steps-panel");
+  panel.appendChild(el("h2",null,"三步完成 · 不用装任何东西"));
+  const list = el("ol","calibration-steps");
+  [["01","选择 JSON","拖入或点击选择刚生成的指南文件。"],
+   ["02","自动检查","在浏览器内核对结构、链接和依赖关系。"],
+   ["03","导出 HTML","预览无误后，一键保存可独立打开的网页。"]].forEach(item => {
+    const li = el("li"); li.appendChild(el("span","step-number",item[0]));
+    const detail = el("div"); detail.appendChild(el("strong",null,item[1])); detail.appendChild(el("p",null,item[2]));
+    li.appendChild(detail); list.appendChild(li);
+  });
+  panel.appendChild(list);
+  const status = el("div","import-status" + (isError ? " error" : ""),message || "等待选择 JSON。所有处理都在这个浏览器标签页中完成。");
+  status.id = "import-status"; status.setAttribute(isError ? "role" : "aria-live",isError ? "alert" : "polite");
+  if(!isError) status.setAttribute("role","status");
+  panel.appendChild(status);
+  panel.appendChild(el("p","import-foot","提示：导出的 HTML 已包含全部内容，之后不需要再带着 JSON。"));
+  grid.appendChild(panel); shell.appendChild(grid); app.appendChild(shell);
+
+  zone.addEventListener("keydown", event => {
+    if(event.key === "Enter" || event.key === " "){
+      event.preventDefault(); input.click();
+    }
+  });
+  ["dragenter","dragover"].forEach(name => zone.addEventListener(name, event => {
+    event.preventDefault(); event.stopPropagation(); zone.classList.add("is-dragging");
+  }));
+  ["dragleave","dragend"].forEach(name => zone.addEventListener(name, event => {
+    event.preventDefault(); event.stopPropagation(); zone.classList.remove("is-dragging");
+  }));
+  zone.addEventListener("drop", event => {
+    event.preventDefault(); event.stopPropagation(); zone.classList.remove("is-dragging");
+    const files = event.dataTransfer && event.dataTransfer.files;
+    if(files && files.length) importGuideFile(files[0]);
+  });
+  input.addEventListener("change", () => { if(input.files && input.files.length) importGuideFile(input.files[0]); });
+}
+
+async function importGuideFile(file){
+  const sequence = ++IMPORT_SEQUENCE;
+  renderImporter("正在读取并检查 “" + (file && file.name ? file.name : "所选文件") + "”…", false);
+  try {
+    if(!file) throw new Error("没有读到文件，请重新选择。");
+    if(file.size === 0) throw new Error("这个文件是空的，请选择包含指南内容的 JSON。");
+    if(file.size > MAX_JSON_BYTES) throw new Error("文件超过 5 MB 上限。请缩小 JSON 后再试。");
+    if(typeof TextDecoder !== "function") throw new Error("这个浏览器太旧，无法安全读取 UTF-8 JSON。请换用较新的浏览器。");
+    const bytes = await file.arrayBuffer();
+    if(sequence !== IMPORT_SEQUENCE) return;
+    const text = new TextDecoder("utf-8",{fatal:true}).decode(bytes);
+    let data;
+    try { data = JSON.parse(text); }
+    catch (_) { throw new Error("JSON 格式不正确。请检查逗号、引号和括号后重新选择。"); }
+    const errors = validateGuideInBrowser(data);
+    if(errors.length){
+      const visible = errors.slice(0,8).map((item,index) => (index + 1) + ". " + item).join("\n");
+      const more = errors.length > 8 ? "\n另有 " + (errors.length - 8) + " 个问题。" : "";
+      throw new Error("这个 JSON 还不能生成指南：\n" + visible + more);
+    }
+    data._storage_key = browserStorageKey(data);
+    CURRENT_DATA = data;
+    CURRENT_FILE_NAME = file.name || "guide.json";
+    render(data);
+    renderPortableToolbar(CURRENT_FILE_NAME);
+  } catch (error){
+    if(sequence === IMPORT_SEQUENCE) renderImporter(formatImportError(error), true);
+  }
+}
+
+function safeDownloadName(topic){
+  const base = String(topic || "knowledge-compass-guide").normalize ? String(topic || "knowledge-compass-guide").normalize("NFKC") : String(topic || "knowledge-compass-guide");
+  let cleaned = Array.from(base.replace(/[\u0000-\u001f\u007f<>:\"/\\|?*]+/g,"-").trim().replace(/^\.+|\.+$/g,"")).slice(0,100).join("");
+  if(/^(con|prn|aux|nul|com[1-9]|lpt[1-9])(?:\.|$)/i.test(cleaned)) cleaned = "guide-" + cleaned;
+  return (cleaned || "knowledge-compass-guide") + ".html";
+}
+
+function exportStandaloneHtml(data){
+  const errors = validateGuideInBrowser(data);
+  if(errors.length) throw new Error("当前指南未通过检查，不能导出。");
+  if(!EXPORT_SKELETON) throw new Error("页面导出骨架不可用，请重新打开 viewer 后再试。");
+  const root = EXPORT_SKELETON.cloneNode(true);
+  const slots = root.querySelectorAll("#kc-guide-data");
+  if(slots.length !== 1) throw new Error("页面数据槽异常，已停止导出。请重新获取 viewer 文件。");
+  slots[0].textContent = jsonForHtml(data);
+  const app = root.querySelector("#app");
+  if(!app) throw new Error("页面结构不完整，已停止导出。请重新获取 viewer 文件。");
+  app.replaceChildren();
+  const body = root.querySelector("body");
+  if(body) body.removeAttribute("class");
+  const title = root.querySelector("title");
+  if(title) title.textContent = (data.topic || "领域指南") + " · 领域指南";
+  return "<!DOCTYPE html>\n" + root.outerHTML;
+}
+
+function updateToolbarStatus(message, isError){
+  const status = document.getElementById("toolbar-live-status");
+  if(!status) return;
+  status.textContent = message;
+  status.style.color = isError ? "#7d382b" : "";
+  status.setAttribute("role",isError ? "alert" : "status");
+}
+
+function downloadStandalone(){
+  try {
+    if(!CURRENT_DATA) throw new Error("请先选择并通过检查的 JSON。");
+    if(typeof Blob !== "function" || !window.URL || typeof URL.createObjectURL !== "function"){
+      throw new Error("这个浏览器不支持本地下载。JSON 已保留，请换用较新的浏览器重试。");
+    }
+    const html = exportStandaloneHtml(CURRENT_DATA);
+    const objectUrl = URL.createObjectURL(new Blob([html],{type:"text/html;charset=utf-8"}));
+    const anchor = document.createElement("a");
+    anchor.href = objectUrl; anchor.download = safeDownloadName(CURRENT_DATA.topic);
+    anchor.style.display = "none"; document.body.appendChild(anchor); anchor.click(); anchor.remove();
+    setTimeout(() => URL.revokeObjectURL(objectUrl),0);
+    updateToolbarStatus("导出已开始。下载完成后可直接双击 HTML 打开。",false);
+  } catch (error){
+    updateToolbarStatus(formatImportError(error),true);
+  }
+}
+
+function renderPortableToolbar(fileName){
+  const app = document.getElementById("app");
+  const toolbar = el("div","portable-toolbar"); toolbar.setAttribute("aria-label","离线指南工具栏");
+  const status = el("div","toolbar-status");
+  status.appendChild(el("strong",null,"✓ 检查通过 · " + fileName));
+  const live = el("span",null,"完整预览已生成，确认后可导出独立 HTML。只在本机处理。");
+  live.id = "toolbar-live-status"; live.setAttribute("role","status"); live.setAttribute("aria-live","polite");
+  status.appendChild(live); toolbar.appendChild(status);
+  const change = el("button","toolbar-button secondary","换一个 JSON"); change.type = "button";
+  change.addEventListener("click",() => { IMPORT_SEQUENCE++; renderImporter("请选择新的指南 JSON。",false); });
+  const download = el("button","toolbar-button","导出独立 HTML"); download.type = "button";
+  download.addEventListener("click",downloadStandalone);
+  toolbar.appendChild(change); toolbar.appendChild(download); app.prepend(toolbar);
 }
 
 // 把含 [n] 角标的正文渲染进 parent：仅当第 n 条 reference 存在时才链到 #ref-n，否则原样保留为文字。
@@ -393,14 +945,38 @@ function makeToggle(layersView, treeView, onShowTree){
   return wrap;
 }
 
+function localStorageAvailable(){
+  const probe = "knowledge-compass:storage-probe:" + Date.now() + ":" + Math.random();
+  try {
+    localStorage.setItem(probe,"1");
+    localStorage.removeItem(probe);
+    return true;
+  } catch (_) {
+    return false;
+  }
+}
+
 function renderPlan(plan, storageKey){
   const box = el("div","plan");
   box.appendChild(el("h2", null, "📋 分阶段学习计划"));
-  box.appendChild(el("p","hint","点击任一阶段标记完成 · 进度自动记在本浏览器"));
+  let persistenceAvailable = localStorageAvailable();
+  const volatileProgress = new Map();
+  box.appendChild(el("p","hint",persistenceAvailable ?
+    "点击任一阶段标记完成 · 进度自动记在本浏览器" :
+    "点击任一阶段标记完成 · 浏览器未开放存储，进度仅在当前页面保留"));
   const prog = el("div","progress"); const bar = el("i"); prog.appendChild(bar); box.appendChild(prog);
   const keyFor = (i)=>"knowledge-compass:"+(storageKey||"")+":step:"+i;
-  const readProgress = (key)=>{ try { return localStorage.getItem(key); } catch (_) { return null; } };
-  const writeProgress = (key,value)=>{ try { localStorage.setItem(key,value); } catch (_) {} };
+  const readProgress = (key)=>{
+    if(!persistenceAvailable) return volatileProgress.get(key) || null;
+    try { return localStorage.getItem(key); }
+    catch (_) { persistenceAvailable = false; return volatileProgress.get(key) || null; }
+  };
+  const writeProgress = (key,value)=>{
+    volatileProgress.set(key,value);
+    if(!persistenceAvailable) return;
+    try { localStorage.setItem(key,value); }
+    catch (_) { persistenceAvailable = false; }
+  };
   function refresh(){
     let done = 0;
     plan.forEach((_,i)=>{ if(readProgress(keyFor(i))==="1") done++; });
@@ -409,13 +985,22 @@ function renderPlan(plan, storageKey){
   plan.forEach((s, i) => {
     const step = el("div","step");
     step.setAttribute("data-n", String(i + 1));
+    step.tabIndex = 0; step.setAttribute("role","checkbox");
     if(readProgress(keyFor(i))==="1") step.classList.add("done");
+    step.setAttribute("aria-checked",step.classList.contains("done") ? "true" : "false");
     if(s.step || s.title) step.appendChild(el("div","step-title", s.step || s.title));
     if(s.detail){ const det = el("div","step-detail"); appendRich(det, s.detail); step.appendChild(det); }
-    step.addEventListener("click", ()=>{
+    function toggleStep(){
       const now = step.classList.toggle("done");
+      step.setAttribute("aria-checked",now ? "true" : "false");
       writeProgress(keyFor(i), now ? "1" : "0");
       refresh();
+    }
+    step.addEventListener("click",toggleStep);
+    step.addEventListener("keydown",event => {
+      if(event.key === "Enter" || event.key === " "){
+        event.preventDefault(); toggleStep();
+      }
     });
     box.appendChild(step);
   });
@@ -453,6 +1038,8 @@ function infoCard(cls, title, text){
 }
 
 function render(data){
+  resetRenderSurface();
+  document.body.classList.remove("import-mode");
   const app = document.getElementById("app");
   REFS = Array.isArray(data.references) ? data.references : [];
 
@@ -515,9 +1102,10 @@ function render(data){
   app.appendChild(layersView);
   if(treeView){
     app.appendChild(treeView);
-    window.addEventListener("resize", ()=>{
+    ROUTE_RESIZE_HANDLER = ()=>{
       if(treeView.style.display !== "none" && drawEdges) drawEdges();
-    });
+    };
+    window.addEventListener("resize",ROUTE_RESIZE_HANDLER);
   }
 
   if(Array.isArray(data.plan) && data.plan.length){
@@ -540,7 +1128,30 @@ function render(data){
   if(data.topic) document.title = data.topic + " · 领域指南";
 }
 
-render(DATA);
+function bootViewer(){
+  const slots = document.querySelectorAll("#kc-guide-data");
+  if(slots.length !== 1){
+    renderImporter("页面数据槽缺失或重复，已停止读取。请重新获取 knowledge-compass viewer 文件。",true);
+    return;
+  }
+  // 在任何用户 JSON 进入 DOM 前封存干净骨架；导出只克隆它，不复制当前预览或工具栏。
+  EXPORT_SKELETON = document.documentElement.cloneNode(true);
+  const raw = slots[0].textContent || "";
+  if(raw.trim() === DATA_MARKER){
+    renderImporter("等待选择 JSON。所有处理都在这个浏览器标签页中完成。",false);
+    return;
+  }
+  try {
+    const data = JSON.parse(raw);
+    const errors = validateGuideInBrowser(data);
+    if(errors.length) throw new Error("内嵌指南未通过安全检查：\n" + errors.slice(0,8).join("\n"));
+    render(data);
+  } catch (error){
+    renderImporter("这个 HTML 内嵌的数据已损坏或不安全：\n" + formatImportError(error) + "\n你仍可选择原始 JSON 重新生成。",true);
+  }
+}
+
+bootViewer();
 </script>
 </body>
 </html>

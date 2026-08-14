@@ -16,7 +16,7 @@ from typing import Any, Dict, Iterable, List, Optional
 
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
-VERSION = "0.5.0"
+VERSION = "0.5.1"
 MARKETPLACE_NAME = "knowledge-compass-skill"
 PLUGIN_NAME = "knowledge-compass"
 PLUGIN_ROOT = REPO_ROOT / "plugins" / PLUGIN_NAME
@@ -193,6 +193,12 @@ def validate() -> List[str]:
     if block:
         if frontmatter_scalar(block, "name") != PLUGIN_NAME:
             errors.append("SKILL.md name must be {!r}".format(PLUGIN_NAME))
+        description_match = re.search(r"^description:\s*(.+)$", block, re.MULTILINE)
+        description = description_match.group(1).strip() if description_match else None
+        if description is None:
+            errors.append("SKILL.md description is missing")
+        elif len(description) > 1024:
+            errors.append("SKILL.md description must be at most 1024 characters")
         if frontmatter_scalar(block, "license") != "MIT":
             errors.append("SKILL.md license must be MIT")
         if metadata_version(block) != VERSION:
@@ -234,6 +240,9 @@ def validate() -> List[str]:
             "codex plugin add knowledge-compass@knowledge-compass-skill",
             "$knowledge-compass",
             "~/knowledge-compass/",
+            "Python is optional",
+            "knowledge-compass-viewer.html",
+            "JSON + structured Markdown",
         )
         for command in required_commands:
             if command not in readme:

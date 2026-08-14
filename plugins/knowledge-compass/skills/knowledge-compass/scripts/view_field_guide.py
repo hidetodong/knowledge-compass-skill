@@ -74,6 +74,7 @@ Stdlib only. Compatible with Python 3.8+.
 """
 import argparse
 import hashlib
+import ipaddress
 import json
 import os
 import re
@@ -85,7 +86,7 @@ import unicodedata
 import webbrowser
 from datetime import date, datetime
 from pathlib import Path
-from urllib.parse import quote, urlsplit
+from urllib.parse import quote
 
 ASSETS = Path(__file__).resolve().parent.parent / "assets"
 VIEWER_TEMPLATE = ASSETS / "viewer_template.html"
@@ -99,6 +100,37 @@ INDEX_PLACEHOLDER = "__LIBRARY_DATA__"
 DEFAULT_LIBRARY = Path(os.environ.get("KNOWLEDGE_COMPASS_LIBRARY", "~/knowledge-compass")).expanduser()
 RESOURCE_ID_RE = re.compile(r"^[a-z0-9][a-z0-9._-]{0,63}$")
 RESERVED_RESOURCE_IDS = {"__proto__", "prototype", "constructor"}
+HTTP_SCHEME_RE = re.compile(r"^https?://", re.IGNORECASE)
+FORBIDDEN_AUTHORITY_CHARS = frozenset('<>"`{}|^')
+
+
+def is_valid_web_hostname(value):
+    """Validate the conservative hostname grammar shared with the browser viewer."""
+    if not value or "%" in value:
+        return False
+    hostname = value[:-1] if value.endswith(".") else value
+    if not hostname or len(hostname) > 253:
+        return False
+    labels = hostname.split(".")
+    if any(not label or len(label) > 63 for label in labels):
+        return False
+
+    if all(char.isascii() and (char.isdigit() or char == ".") for char in hostname):
+        if len(labels) != 4:
+            return False
+        return all(
+            label.isascii()
+            and label.isdigit()
+            and (label == "0" or not label.startswith("0"))
+            and int(label) <= 255
+            for label in labels
+        )
+
+    return all(
+        char in {"-", "_"} or unicodedata.category(char)[0] in {"L", "M", "N"}
+        for label in labels
+        for char in label
+    )
 
 
 def is_safe_web_url(value):
@@ -109,11 +141,53 @@ def is_safe_web_url(value):
         or any(unicodedata.category(char) in {"Cc", "Cs"} for char in value)
     ):
         return False
-    try:
-        parsed = urlsplit(value.strip())
-    except ValueError:
+    trimmed = value.strip()
+    # Keep the browser and Python trust boundaries deterministic. urllib accepts
+    # whitespace inside a hostname while WHATWG URL parsing rejects it, which can
+    # otherwise produce a Python-generated page that refuses its own embedded data.
+    if any(char.isspace() or char == "\\" or char == "\ufeff" for char in trimmed):
         return False
-    return parsed.scheme.lower() in {"http", "https"} and bool(parsed.netloc)
+    scheme = HTTP_SCHEME_RE.match(trimmed)
+    if scheme is None:
+        return False
+    remainder = trimmed[scheme.end() :]
+    authority = re.split(r"[/?#]", remainder, maxsplit=1)[0]
+    if not authority or any(char in FORBIDDEN_AUTHORITY_CHARS for char in authority):
+        return False
+    host_port = authority.rsplit("@", 1)[-1]
+    if not host_port:
+        return False
+
+    if host_port.startswith("["):
+        close = host_port.find("]")
+        if close <= 1:
+            return False
+        hostname = host_port[1:close]
+        if "%" in hostname:
+            return False
+        tail = host_port[close + 1 :]
+        try:
+            ipaddress.IPv6Address(hostname)
+        except ipaddress.AddressValueError:
+            return False
+        if not tail:
+            return True
+        if not tail.startswith(":"):
+            return False
+        port = tail[1:]
+    else:
+        if ":" in host_port:
+            hostname, separator, port = host_port.rpartition(":")
+            if not separator or ":" in hostname:
+                return False
+        else:
+            hostname, port = host_port, None
+        if not is_valid_web_hostname(hostname):
+            return False
+
+    return port is None or (
+        port.isascii() and port.isdigit() and int(port) <= 65535
+    )
 
 
 def is_valid_resource_id(value):
@@ -382,9 +456,13 @@ def inline(template_path, placeholder, payload_obj):
         .replace("\u2028", "\\u2028")
         .replace("\u2029", "\\u2029")
     )
-    if placeholder not in tpl:
-        raise ValueError(f"placeholder {placeholder} missing from {template_path}")
-    return tpl.replace(placeholder, payload)
+    placeholder_count = tpl.count(placeholder)
+    if placeholder_count != 1:
+        raise ValueError(
+            f"placeholder {placeholder} must appear exactly once in {template_path}; "
+            f"found {placeholder_count}"
+        )
+    return tpl.replace(placeholder, payload, 1)
 
 
 def index_entry(data, html_name, mtime):
