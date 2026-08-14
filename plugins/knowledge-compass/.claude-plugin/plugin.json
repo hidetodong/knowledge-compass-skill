@@ -1,6 +1,6 @@
 {
   "name": "knowledge-compass",
-  "version": "0.5.0",
+  "version": "0.5.1",
   "description": "Reverse-map unfamiliar terms to a field, verify authoritative sources, and build an interactive learning roadmap.",
   "author": {
     "name": "hidetodong",

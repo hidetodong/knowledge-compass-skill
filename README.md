@@ -10,7 +10,7 @@ Knowledge Compass is an Agent Skill for **Claude Code** and **Codex**. Give it a
 2. Pauses for confirmation before starting the expensive research phase.
 3. Verifies books, papers, courses, standards, and institutional sources.
 4. Builds a staged learning route with prerequisites and source dependencies.
-5. Renders the guide as local JSON and a self-contained interactive HTML page.
+5. Delivers the guide locally: automatically rendered and archived with Python, or through a zero-install offline browser viewer when Python is unavailable.
 
 Knowledge Compass is useful for prompts such as:
 
@@ -21,10 +21,11 @@ Knowledge Compass is useful for prompts such as:
 ## Requirements
 
 - Claude Code or Codex with plugin support
-- Python 3.8 or newer for rendering the guide
 - Internet access during source discovery and verification
 
-The renderer itself has no third-party Python dependencies.
+**Python is optional.** If `python3` 3.8 or newer is already available, Knowledge Compass uses it for automatic rendering, archiving, and library indexing. If it is not available, the skill does not install Python or ask you to use a terminal: it gives you an offline browser viewer instead. If no local browser can be opened either, you still receive the complete JSON and a structured Markdown guide.
+
+The Python renderer has no third-party dependencies. The browser fallback is bundled with the skill, runs locally, and does not upload the guide.
 
 ## Install in Claude Code
 
@@ -60,9 +61,21 @@ $knowledge-compass
 
 Restart the host after installation if the new skill is not visible in the current session.
 
-## Local library and output
+## Delivery paths
 
-By default, generated guides are archived in:
+| Environment | What you receive | Central archive and `index.html` |
+|---|---|---|
+| `python3` 3.8+ is detected | JSON + self-contained HTML | Updated automatically |
+| No compatible Python, local browser available | JSON + structured Markdown + `knowledge-compass-viewer.html`; import the JSON and export a self-contained HTML page | Not updated |
+| Neither Python nor a local browser is available | JSON + structured Markdown | Not updated; only the interactive view and library features are unavailable |
+
+If you do not know how to install Python, **you do not need to learn or install it for this skill**. Open `knowledge-compass-viewer.html`, select or drag in the JSON file beside it, and click **导出独立 HTML** (Export standalone HTML) after the page confirms the guide is valid. The three-step page works offline and keeps the data on your device.
+
+The exported browser page is a complete, shareable guide, but the zero-install path deliberately does not write to `~/knowledge-compass/` or rebuild the central `index.html`. Use the automatic Python path later if you want the long-term multi-guide library.
+
+## Automatic local library (optional Python path)
+
+When `python3` 3.8 or newer is available, generated guides are archived by default in:
 
 ```text
 ~/knowledge-compass/
@@ -104,6 +117,7 @@ Claude Code and Codex load the same `SKILL.md`, renderer, templates, and eval ca
 ## Security and privacy boundaries
 
 - Guides and progress data stay local. The plugin has no MCP server, cloud service, analytics, or telemetry. The interactive page stores checklist progress in the browser's local storage.
+- The zero-install viewer reads the JSON through the browser's local file picker. It does not upload the file and does not require a network connection.
 - Source discovery and verification use the host agent's available web tools. The generated page is self-contained and does not fetch remote scripts; outbound resource links open only when you choose them.
 - Terms, surrounding context, and search queries may be sent to the providers behind those host web tools during source discovery; review your host's data controls before researching sensitive material.
 - The renderer validates the documented JSON structure, safely embeds JSON into HTML, treats supplied content as text, and only makes `http://` or `https://` resource links clickable.
