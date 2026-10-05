@@ -63,6 +63,14 @@ The JSON schema (all fields optional except topic + layers):
      "detail": "读哪些资源的哪部分、目标是什么、达到什么标志可进入下一阶段"}
   ],
   "route": "（可选，plan 的简短替代）2-4 句可执行的建议顺序",
+  # 学成之后：按路线学完后大致处在什么水平，以及会懂得的知识、能做到的事。渲染在计划之后、参考来源之前。
+  "outcomes_summary": "（可选）一两句：学完后大致处在什么水平、离更深一层还差什么",
+  "outcomes": [
+    {"kind": "知识",                 # 必填：知识（你会懂得）| 能力（你能做到）
+     "title": "明白为什么样本均值会稳定在期望附近",   # 必填：一句具体、可检验的收获
+     "detail": "（可选）具体包括什么、靠路线哪几个阶段或资源获得",
+     "check": "（可选）自检标志：怎样算真掌握了"}
+  ],
   # 参考来源：本指南分析所依据的可溯出处。正文里写 [1][2] 角标即按序号链到底部编号列表。
   "references": [
     {"title": "《自杀论》（Le Suicide）", "source": "涂尔干 · 1897",
@@ -102,6 +110,18 @@ RESOURCE_ID_RE = re.compile(r"^[a-z0-9][a-z0-9._-]{0,63}$")
 RESERVED_RESOURCE_IDS = {"__proto__", "prototype", "constructor"}
 HTTP_SCHEME_RE = re.compile(r"^https?://", re.IGNORECASE)
 FORBIDDEN_AUTHORITY_CHARS = frozenset('<>"`{}|^')
+OUTCOME_KINDS = ("知识", "能力")
+# Python str.strip() and JavaScript trim() disagree on "whitespace" (\x1c-\x1f and \x85 vs \ufeff).
+# Blank checks use this explicit union instead; the viewer's BLANK_TEXT_RE mirrors it.
+BLANK_CHARS = (
+    "\t\n\x0b\x0c\r\x1c\x1d\x1e\x1f \x85\xa0\u1680\u2000\u2001\u2002\u2003\u2004\u2005"
+    "\u2006\u2007\u2008\u2009\u200a\u2028\u2029\u202f\u205f\u3000\ufeff"
+)
+
+
+def is_blank_text(value):
+    """True when a string holds only characters either runtime treats as whitespace."""
+    return not value.strip(BLANK_CHARS)
 
 
 def is_valid_web_hostname(value):
@@ -229,6 +249,7 @@ def validate_guide(data):
         "overview",
         "prerequisites",
         "route",
+        "outcomes_summary",
     ):
         if key in data and not isinstance(data.get(key), str):
             errors.append(f"{key} must be a string")
@@ -361,6 +382,24 @@ def validate_guide(data):
                 for key in ("step", "title", "detail"):
                     if key in step and not isinstance(step.get(key), str):
                         errors.append(f"plan[{index}].{key} must be a string")
+
+    outcomes = data.get("outcomes", [])
+    if not isinstance(outcomes, list):
+        errors.append("outcomes must be an array")
+    else:
+        for index, outcome in enumerate(outcomes):
+            path = f"outcomes[{index}]"
+            if not isinstance(outcome, dict):
+                errors.append(f"{path} must be an object")
+                continue
+            if outcome.get("kind") not in OUTCOME_KINDS:
+                errors.append(f"{path}.kind must be 知识 or 能力")
+            title = outcome.get("title")
+            if not isinstance(title, str) or is_blank_text(title):
+                errors.append(f"{path}.title must be a non-empty string")
+            for key in ("detail", "check"):
+                if key in outcome and not isinstance(outcome.get(key), str):
+                    errors.append(f"{path}.{key} must be a string")
 
     for key in ("fragments", "disciplines"):
         value = data.get(key, [])
