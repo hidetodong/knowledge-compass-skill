@@ -145,6 +145,24 @@
     padding:20px 22px;margin-top:30px;box-shadow:0 8px 24px rgba(20,40,30,.20)}
   .route h2{font-family:var(--serif);margin:0 0 8px;font-size:16px;color:#f5efe1}
   .route p{margin:0;font-size:14.5px;white-space:pre-wrap;opacity:.95}
+  /* 学成之后：路线终点。浅色卡片 + 金色顶边，与上方深色计划块错开 */
+  .outcomes{background:var(--card);border:1px solid var(--line);border-top:4px solid var(--gold);
+    border-radius:12px;padding:20px 22px;margin-top:30px;overflow-wrap:anywhere}
+  .outcomes h2{font-family:var(--serif);margin:0 0 8px;font-size:17px;letter-spacing:.04em}
+  .outcomes .outcomes-summary{margin:0 0 16px;font-size:14.5px;white-space:pre-wrap}
+  .outcome-groups{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(260px,100%),1fr));gap:18px 22px}
+  .outcome-group{min-width:0;border-left:3px solid var(--accent);padding-left:14px}
+  .outcome-group.ability{border-left-color:var(--gold)}
+  .outcome-group h3{margin:0 0 8px;font-size:13px;color:var(--muted);letter-spacing:.04em;font-weight:600}
+  .outcome-group ul{list-style:none;margin:0;padding:0}
+  .outcome{margin:0 0 14px}
+  .outcome:last-child{margin-bottom:0}
+  .outcome p{margin:0}
+  .outcome .outcome-title{font-size:14.5px;font-weight:600;line-height:1.55}
+  .outcome .outcome-detail{margin-top:3px;font-size:13.5px;color:var(--muted);white-space:pre-wrap}
+  .outcome .outcome-check{margin-top:6px;font-size:13px;color:var(--chip-ok-ink);white-space:pre-wrap}
+  .outcome-check .check-label{display:inline-block;margin-right:6px;padding:0 7px;border-radius:999px;
+    background:var(--chip-ok);color:var(--chip-ok-ink);font-size:11.5px;font-weight:700;letter-spacing:.06em}
   /* 参考来源 */
   .refs{background:var(--card);border:1px solid var(--line);border-radius:12px;
     padding:18px 20px;margin-top:30px}
@@ -273,6 +291,15 @@ const PRI = {
 // 参考来源（顶层 references），在 render() 起始赋值；appendRich 据它解析正文 [n] 角标。
 let REFS = [];
 
+// 学成之后：按这里的顺序分组展示，kind 的合法值也取自这里。
+const OUTCOME_GROUPS = [
+  {kind:"知识", cls:"knowledge", label:"🧠 你会懂得"},
+  {kind:"能力", cls:"ability",   label:"🛠 你能做到"}
+];
+const OUTCOME_KINDS = OUTCOME_GROUPS.map(group => group.kind);
+// 空白判定用显式字符表，与 view_field_guide.py 的 BLANK_CHARS 一致（两端原生 trim/strip 的空白集合不同）。
+const BLANK_TEXT_RE = /^[\t\n\v\f\r\x1c-\x1f \x85\xa0\u1680\u2000-\u200a\u2028\u2029\u202f\u205f\u3000\ufeff]*$/;
+
 function el(tag, cls, text){
   const e = document.createElement(tag);
   if(cls) e.className = cls;
@@ -380,7 +407,7 @@ function validateGuideInBrowser(data){
     errors.push("topic must not contain control characters");
   }
 
-  ["domain","domain_judgment","confidence","excluded","overview","prerequisites","route"].forEach(key => {
+  ["domain","domain_judgment","confidence","excluded","overview","prerequisites","route","outcomes_summary"].forEach(key => {
     if(Object.prototype.hasOwnProperty.call(data, key) && typeof data[key] !== "string"){
       errors.push(key + " must be a string");
     }
@@ -517,6 +544,32 @@ function validateGuideInBrowser(data){
       ["step","title","detail"].forEach(key => {
         if(Object.prototype.hasOwnProperty.call(step, key) && typeof step[key] !== "string"){
           errors.push("plan[" + index + "]." + key + " must be a string");
+        }
+      });
+    });
+  }
+
+  const outcomes = Object.prototype.hasOwnProperty.call(data,"outcomes") ? data.outcomes : [];
+  if(!Array.isArray(outcomes)){
+    errors.push("outcomes must be an array");
+  } else {
+    outcomes.forEach((outcome, index) => {
+      const path = "outcomes[" + index + "]";
+      if(!isRecord(outcome)){
+        errors.push(path + " must be an object");
+        return;
+      }
+      const own = key => Object.prototype.hasOwnProperty.call(outcome, key) ? outcome[key] : undefined;
+      if(!OUTCOME_KINDS.includes(own("kind"))){
+        errors.push(path + ".kind must be 知识 or 能力");
+      }
+      const title = own("title");
+      if(typeof title !== "string" || BLANK_TEXT_RE.test(title)){
+        errors.push(path + ".title must be a non-empty string");
+      }
+      ["detail","check"].forEach(key => {
+        if(Object.prototype.hasOwnProperty.call(outcome, key) && typeof outcome[key] !== "string"){
+          errors.push(path + "." + key + " must be a string");
         }
       });
     });
@@ -1030,6 +1083,46 @@ function renderReferences(refs){
   return box;
 }
 
+// 路线终点：大致水平 + 「你会懂得」「你能做到」两组；没有任何内容时返回 null，整块不出现。
+function renderOutcomes(summary, outcomes){
+  // 只含空白的文字一律当没有，免得出现空段落或孤零零的「自检」标签。
+  const hasText = value => typeof value === "string" && !BLANK_TEXT_RE.test(value);
+  const items = Array.isArray(outcomes) ? outcomes : [];
+  const hasSummary = hasText(summary);
+  if(!hasSummary && !items.length) return null;
+  const box = el("section","outcomes");
+  box.setAttribute("aria-labelledby","outcomes-title");
+  const heading = el("h2", null, "🎯 学成之后");
+  heading.id = "outcomes-title";
+  box.appendChild(heading);
+  if(hasSummary) box.appendChild(richP("outcomes-summary", summary));
+  const groups = el("div","outcome-groups");
+  OUTCOME_GROUPS.forEach(group => {
+    const members = items.filter(item => item.kind === group.kind);
+    if(!members.length) return;
+    const column = el("div","outcome-group " + group.cls);
+    column.appendChild(el("h3", null, group.label));
+    const ul = el("ul");
+    members.forEach(item => {
+      const li = el("li","outcome");
+      li.appendChild(richP("outcome-title", item.title));
+      if(hasText(item.detail)) li.appendChild(richP("outcome-detail", item.detail));
+      if(hasText(item.check)){
+        const check = el("p","outcome-check");
+        check.appendChild(el("span","check-label","自检"));
+        check.appendChild(el("span","sr-only","："));  // 读屏时把标签和内容断开
+        appendRich(check, item.check);
+        li.appendChild(check);
+      }
+      ul.appendChild(li);
+    });
+    column.appendChild(ul);
+    groups.appendChild(column);
+  });
+  if(groups.childNodes.length) box.appendChild(groups);
+  return box;
+}
+
 function infoCard(cls, title, text){
   const c = el("div", "info" + (cls ? (" " + cls) : ""));
   c.appendChild(el("h2", null, title));
@@ -1116,6 +1209,9 @@ function render(data){
     rt.appendChild(richP(null, data.route));
     app.appendChild(rt);
   }
+
+  const outcomesSection = renderOutcomes(data.outcomes_summary, data.outcomes);
+  if(outcomesSection) app.appendChild(outcomesSection);
 
   if(REFS.length) app.appendChild(renderReferences(REFS));
 

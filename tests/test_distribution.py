@@ -51,10 +51,10 @@ class DistributionTests(unittest.TestCase):
         claude_plugin = load_json("plugins/knowledge-compass/.claude-plugin/plugin.json")
         codex_plugin = load_json("plugins/knowledge-compass/.codex-plugin/plugin.json")
 
-        self.assertEqual(claude_marketplace["metadata"]["version"], "0.5.1")
-        self.assertEqual(claude_marketplace["plugins"][0]["version"], "0.5.1")
-        self.assertEqual(claude_plugin["version"], "0.5.1")
-        self.assertEqual(codex_plugin["version"], "0.5.1")
+        self.assertEqual(claude_marketplace["metadata"]["version"], "0.6.0")
+        self.assertEqual(claude_marketplace["plugins"][0]["version"], "0.6.0")
+        self.assertEqual(claude_plugin["version"], "0.6.0")
+        self.assertEqual(codex_plugin["version"], "0.6.0")
 
     def test_there_is_one_canonical_skill(self):
         skill_files = sorted((REPO_ROOT / "plugins").rglob("SKILL.md"))
@@ -105,6 +105,26 @@ class DistributionTests(unittest.TestCase):
         ):
             with self.subTest(value=value):
                 self.assertIn(value, readme)
+
+    def test_learning_outcomes_contract_is_explicit(self):
+        skill = (SKILL_ROOT / "SKILL.md").read_text(encoding="utf-8")
+        readme = (REPO_ROOT / "README.md").read_text(encoding="utf-8")
+        evals = json.loads((SKILL_ROOT / "evals" / "evals.json").read_text(encoding="utf-8"))
+        for value in (
+            "outcomes_summary",
+            '`kind: "知识"`',
+            '`kind: "能力"`',
+            "各 2–4 条",
+            "每条都必须能追溯到 `plan` 的阶段或 `layers` 的资源",
+            "不写职业、岗位、证书或收入承诺",
+            "学成之后（大致水平、你会懂得、你能做到及各自的自检标志）",
+        ):
+            with self.subTest(value=value):
+                self.assertIn(value, skill)
+        self.assertIn("what you will roughly know and be able to do", readme)
+        for case in evals["evals"]:
+            with self.subTest(eval_id=case["id"]):
+                self.assertTrue(any("学成之后" in item for item in case["assertions"]))
 
     def test_offline_viewer_is_packaged_self_contained_and_accessible(self):
         viewer = VIEWER.read_text(encoding="utf-8")

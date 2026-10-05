@@ -3,7 +3,7 @@ name: knowledge-compass
 description: This skill should be used when the user has a handful of scattered, unfamiliar terms or jargon they ran into somewhere and wants to figure out what field they belong to, where the authoritative/trustworthy knowledge on that field lives, and how to start learning it — e.g. "我最近老听到 X、Y、Z 这几个词，不知道是什么领域", "these buzzwords keep coming up, what domain is this and how do I get into it", "reverse-engineer the field from these terms and give me a learning roadmap", "这些名词属于哪个领域？有哪些权威资料和学习路径". It reverse-infers the domain from the terms (confirming candidates with the user when ambiguous), researches verified authoritative sources, and produces a source-verified learning path as local JSON plus self-contained HTML or structured Markdown, with automatic archiving when Python 3.8+ is available. Trigger even when the user doesn't say "domain", "field", or "learning path" — any time they have orphan terminology and want to know the field plus where to learn it authoritatively.
 license: MIT
 metadata:
-  version: "0.5.1"
+  version: "0.6.0"
   author: "hidetodong"
   compatibility: "Claude Code; Codex; modern browser; Python 3.8+ optional"
 ---
@@ -67,12 +67,17 @@ metadata:
 - **每一层放 2–4 个来源**，并按优先级标注：`必读`（绕不开）/ `推荐`（很好的补充）/ `可选`（按需取用）。网页会据此给徽章、左边框配色，并把必读自动排在前面。
 - 每个来源都尽量给齐：中英对照的标题、作者 / 版本 / 年份、类型、**为什么权威 / 为什么在这一层**（reason）、读它需要的**前置**、**难度**、**适合谁**、链接、是否免费、核实状态。
 - 顶层还要给：**领域眉题**（`domain`，见下）、领域判断一行（哪些碎片共现锁定该领域）+ 置信度、横跨的**学科归属**、2–4 句**领域速览**、整个领域的**前置知识**（学这块整体需要先会什么）。
-- 最后给一份**分阶段学习计划**（plan）：每个阶段说清「读哪些资源的哪部分、目标、达到什么标志可进下一阶段」，并尽量标个大致周期。网页会把它渲染成可勾选、带进度记忆的时间线。
+- 再给一份**分阶段学习计划**（plan）：每个阶段说清「读哪些资源的哪部分、目标、达到什么标志可进下一阶段」，并尽量标个大致周期。网页会把它渲染成可勾选、带进度记忆的时间线。
+- 路线的终点写**学成之后**（`outcomes_summary` + `outcomes`）：按这条路线学完，读者大致会收获什么。出发点是求知——写懂了什么、能做什么，**不写职业、岗位、证书或收入承诺**。
+  - `outcomes_summary`：一两句诚实说明学完后大致处在什么水平、离更深一层还差什么。
+  - `outcomes` 分两类：`kind: "知识"`（你会懂得：能讲清楚的概念、原理、来龙去脉）和 `kind: "能力"`（你能做到：能动手完成的事），**各 2–4 条**。`title` 写一句具体、可检验的收获；`detail` 说具体包括什么、靠路线哪几个阶段或哪些资源获得；`check` 写自检标志——怎样算真掌握了。
+  - **每条都必须能追溯到 `plan` 的阶段或 `layers` 的资源**，深浅和路线相称：路线没教的不写，三个月的入门路线不写成专家水平。
+  - ❌「精通期权交易」「理解金融」（夸大或空泛）　✅ 知识类「能解释为什么临近到期时平值期权的 gamma 会变大」，自检：「不看书，能给朋友讲清楚 gamma 和到期时间的关系」；能力类「能读懂一张期权报价表，算出一笔备兑开仓的盈亏平衡点」，自检：「随手找一张真实报价表，五分钟内算对」。
 
 再做三件事，让成品**点明领域、可溯来源、可看依赖**：
 
 - **标题直接点明领域**（不要泛泛）。`topic` 一律以反推出的**领域 + 分支**领衔，并填 `domain` 眉题——网页会把它渲染成大标题上方的醒目金色眉题。例如碎片是「集体表象、社会事实、失范」，就不是写「集体表象」，而是 `domain: "社会学 · 古典社会学理论"`、`topic: "涂尔干学派：集体表象与社会事实"`。读者第一眼就知道这是哪个学科。
-- **引用要可溯**（绑定反幻觉，第一纪律的延伸）。凡正文里的**分析性结论**——领域速览、领域判断、某来源"为什么权威"、前置判断——只要是从某个出处得来的，就在该处写 `[1]`、`[2]` 角标，并在顶层 `references` 数组里按序登记出处（`title` / `source` / `url` / 可选 `note`）。网页把它们渲染成页面**最下方的编号「参考来源」区**，角标可点击跳转。这让"这个判断从哪来"一查即知，而不是凭空断言。`references` 里的出处同样适用反幻觉纪律：核实存在才登记。
+- **引用要可溯**（绑定反幻觉，第一纪律的延伸）。凡正文里的**分析性结论**——领域速览、领域判断、某来源"为什么权威"、前置判断、学成之后的水平说明与收获——只要是从某个出处得来的，就在该处写 `[1]`、`[2]` 角标，并在顶层 `references` 数组里按序登记出处（`title` / `source` / `url` / 可选 `note`）。网页把它们渲染成页面**最下方的编号「参考来源」区**，角标可点击跳转。这让"这个判断从哪来"一查即知，而不是凭空断言。`references` 里的出处同样适用反幻觉纪律：核实存在才登记。
 - **资源有先后就给依赖**（驱动流程树）。当来源之间存在明确的**学习先后**（要先读完 A 才啃得动 B）时，给每个相关来源一个稳定 `id`，并在后置来源上填 `requires: [前置的 id, …]`。网页据此提供「📚 分层视图 / 🌳 学习路线树」切换：树里按依赖分层、画连线箭头（顶层=可任意起步）。注意 `requires`（资源→资源依赖）与 `prereq`（该来源需要的背景知识，自由文本）是两回事，别混填。没有清晰先后关系就别硬造——不填 `requires`，切换按钮就不出现。
 
 ### Phase 4 — Deliver with the best available local path（按本机能力交付）
@@ -95,7 +100,7 @@ metadata:
 
 #### B. 没有兼容 Python：零安装离线浏览器
 
-1. 从同一 JSON 生成结构化 Markdown，至少完整保留：领域与置信度、原始碎片、领域判断、速览、前置知识、四层资源及其链接/优先级/核实状态、分阶段计划和参考来源。写到 JSON 旁；不要把 Markdown 当成新的真源。
+1. 从同一 JSON 生成结构化 Markdown，至少完整保留：领域与置信度、原始碎片、领域判断、速览、前置知识、四层资源及其链接/优先级/核实状态、分阶段计划、学成之后（大致水平、你会懂得、你能做到及各自的自检标志）和参考来源。写到 JSON 旁；不要把 Markdown 当成新的真源。
 2. 把 `<skill-dir>/assets/viewer_template.html` 原样复制到 JSON 旁，命名为 `knowledge-compass-viewer.html`。如果该路径已是本 skill 先前复制的 viewer，可更新它；如果是无法确认归属的文件，改用安全的数字后缀，绝不覆盖用户内容。
 3. 用宿主已有的本地浏览器能力打开复制出的 viewer。不要为此安装浏览器，也不要把文件上传到网站。
 4. 只给用户这段小白指引，并带上真实文件名：**“无需安装任何东西：在打开的「离线罗盘校准台」里选择或拖入这份 JSON，检查通过后点「导出独立 HTML」。”** 页面会在本机读取并校验 JSON，生成可单独保存、离线打开和分享的 HTML。
@@ -110,11 +115,12 @@ metadata:
 
 完整字段见 `scripts/view_field_guide.py` 顶部 docstring。要点：
 
-- **顶层**：`topic`（标题，以领域+分支领衔，如「涂尔干学派：集体表象与社会事实」）、`domain`（领域眉题，如「社会学 · 古典社会学理论」，渲染成大标题上方金色眉题）、`fragments`（用户原始碎片，原样照列）、`domain_judgment`（一行——哪些词共现锁定该领域）、`confidence`（高/中/低）、`excluded`（可选，被排除 / 不吻合的词；全吻合则省略）、`disciplines`（学科归属数组）、`overview`（2–4 句速览）、`prerequisites`（领域级前置）。正文字段（`overview`/`domain_judgment`/`excluded`/`prerequisites` 及各 `reason`/`plan.detail`/`route`）里可写 `[n]` 角标引用 `references`。
+- **顶层**：`topic`（标题，以领域+分支领衔，如「涂尔干学派：集体表象与社会事实」）、`domain`（领域眉题，如「社会学 · 古典社会学理论」，渲染成大标题上方金色眉题）、`fragments`（用户原始碎片，原样照列）、`domain_judgment`（一行——哪些词共现锁定该领域）、`confidence`（高/中/低）、`excluded`（可选，被排除 / 不吻合的词；全吻合则省略）、`disciplines`（学科归属数组）、`overview`（2–4 句速览）、`prerequisites`（领域级前置）。正文字段（`overview`/`domain_judgment`/`excluded`/`prerequisites`/`outcomes_summary` 及各 `reason`/`plan.detail`/`route`/`outcomes` 的 `title`、`detail`、`check`）里可写 `[n]` 角标引用 `references`。
 - **`layers`**：每层 `{emoji, title, subtitle, resources[]}`；4 层（入门 / 经典 / 进阶 / 实践），每层 2–4 个来源。
 - **每个 resource**：`name`（中英对照）、`meta`（作者，版本/年份）、`type`、`priority`（必读/推荐/可选）、`prereq`（背景知识，自由文本）、`reason`、`difficulty`、`audience`、`url`（仅 `http://` / `https://`）、`free`、`verified`（只有显式 `true` 才显示已核实）、`verify_note`；流程树相关：`id`（1–64 位小写字母、数字、`.`、`_`、`-` 组成的稳定键；不要用 `constructor` / `prototype` 等保留键）、`requires`（前置来源 id 数组，资源→资源依赖，与 `prereq` 不同）。
 - **`references`**：可溯出处数组 `{title, source, url, note}`，按序号对应正文 `[n]` 角标，渲染在页面最下方「参考来源」区；登记前同样须核实存在。
 - **`plan`**：分阶段数组 `{step, detail}`，可执行、有目标和完成标志；没有 plan 时才用 `route`（一段话替代）。
+- **`outcomes_summary` / `outcomes`**：学成之后。`outcomes_summary` 一两句写大致水平和还差什么；`outcomes` 是 `{kind, title, detail, check}` 数组，`kind` 只能是 `知识` 或 `能力`，`title` 必填，各类 2–4 条。网页把它渲染在学习计划之后、参考来源之前，按「你会懂得 / 你能做到」分组。
 
 **一个 resource 的示例：**
 

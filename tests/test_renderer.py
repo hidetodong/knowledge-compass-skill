@@ -497,5 +497,235 @@ process.stdout.write(JSON.stringify(vectors.map(value => isSafeWebUrl(value))));
             self.assertIn("javascript%3Aalert%281%29.html", index)
 
 
+def guide_with_outcomes():
+    payload = valid_guide()
+    payload["outcomes_summary"] = "学完大致相当于读完一门入门课，离独立研究还差习题训练。[1]"
+    payload["outcomes"] = [
+        {"kind": "能力", "title": "能用模拟验证大数定律", "check": "十分钟内写出抛硬币模拟"},
+        {"kind": "知识", "title": "明白样本均值为什么会稳定", "detail": "靠阶段 1 获得[1]"},
+        {"kind": "能力", "title": "能读懂教材里的极限定理证明"},
+    ]
+    return payload
+
+
+# Each case breaks one outcome rule; the browser must report the exact same errors.
+INVALID_OUTCOME_CASES = (
+    ("outcomes", {}, ["outcomes must be an array"]),
+    ("outcomes", None, ["outcomes must be an array"]),
+    ("outcomes", ["知识"], ["outcomes[0] must be an object"]),
+    ("outcomes", [{"kind": "技能", "title": "t"}], ["outcomes[0].kind must be 知识 or 能力"]),
+    ("outcomes", [{"title": "t"}], ["outcomes[0].kind must be 知识 or 能力"]),
+    ("outcomes", [{"kind": "知识"}], ["outcomes[0].title must be a non-empty string"]),
+    ("outcomes", [{"kind": "知识", "title": " \u3000\n"}], ["outcomes[0].title must be a non-empty string"]),
+    ("outcomes", [{"kind": "知识", "title": 7}], ["outcomes[0].title must be a non-empty string"]),
+    ("outcomes", [{"kind": "知识", "title": "t", "detail": 1}], ["outcomes[0].detail must be a string"]),
+    ("outcomes", [{"kind": "能力", "title": "t", "check": []}], ["outcomes[0].check must be a string"]),
+    # JSON.parse keeps "__proto__" as an ordinary key, so its contents must not count as the item's fields.
+    (
+        "outcomes",
+        [{"__proto__": {"kind": "知识", "title": "t"}}],
+        ["outcomes[0].kind must be 知识 or 能力", "outcomes[0].title must be a non-empty string"],
+    ),
+    ("outcomes_summary", 1, ["outcomes_summary must be a string"]),
+    ("outcomes_summary", None, ["outcomes_summary must be a string"]),
+)
+
+
+def run_viewer_probe(probes):
+    """Run the viewer script in Node with bootViewer() replaced by probe code; return its stdout JSON."""
+    viewer = VIEWER.read_text(encoding="utf-8")
+    executable = viewer.split("<script>\n", 1)[1].rsplit("</script>", 1)[0]
+    script = executable.replace("bootViewer();", probes)
+    with tempfile.TemporaryDirectory() as tmp:
+        runner = Path(tmp) / "viewer-probe.js"
+        runner.write_text(script, encoding="utf-8")
+        result = subprocess.run(
+            [shutil.which("node"), str(runner)],
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+            check=False,
+        )
+    if result.returncode != 0:
+        raise AssertionError(result.stderr)
+    return json.loads(result.stdout)
+
+
+class LearningOutcomeTests(unittest.TestCase):
+    def render(self, payload):
+        tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(tmp.cleanup)
+        root = Path(tmp.name)
+        path = root / "guide.json"
+        path.write_text(json.dumps(payload, ensure_ascii=False), encoding="utf-8")
+        return root, run_renderer(path, root / "library", "--no-archive")
+
+    def test_outcomes_are_accepted_and_embedded_unchanged(self):
+        payload = guide_with_outcomes()
+        root, result = self.render(payload)
+
+        self.assertEqual(result.returncode, 0, result.stderr)
+        html = (root / "guide.html").read_text(encoding="utf-8")
+        match = re.search(
+            r'<script id="kc-guide-data" type="application/json">(.*?)</script>', html, re.DOTALL
+        )
+        embedded = json.loads(match.group(1))
+        self.assertEqual(embedded["outcomes"], payload["outcomes"])
+        self.assertEqual(embedded["outcomes_summary"], payload["outcomes_summary"])
+
+    def test_invalid_outcomes_are_rejected_before_any_output_is_written(self):
+        for key, value, expected in INVALID_OUTCOME_CASES:
+            with self.subTest(key=key, value=value):
+                payload = guide_with_outcomes()
+                payload[key] = value
+                root, result = self.render(payload)
+
+                self.assertEqual(result.returncode, 2)
+                for message in expected:
+                    self.assertIn(message, result.stderr)
+                self.assertFalse((root / "guide.html").exists())
+                self.assertFalse((root / "library").exists())
+
+    @unittest.skipUnless(shutil.which("node"), "Node.js is unavailable for validator parity")
+    def test_python_and_browser_report_identical_outcome_errors(self):
+        spec = importlib.util.spec_from_file_location("view_field_guide", RENDERER)
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+
+        payloads = [valid_guide(), guide_with_outcomes()]
+        for key, value, _ in INVALID_OUTCOME_CASES:
+            payload = guide_with_outcomes()
+            payload[key] = value
+            payloads.append(payload)
+        multi = guide_with_outcomes()
+        multi["outcomes"] = [{"kind": 1, "title": "", "detail": 2, "check": 3}, None]
+        payloads.append(multi)
+        # Every character either runtime calls whitespace, plus look-alikes that are not blank.
+        for char in module.BLANK_CHARS + "\u200b\u180ea":
+            payload = guide_with_outcomes()
+            payload["outcomes"][0]["title"] = char * 2
+            payloads.append(payload)
+        # Keys that would touch the prototype chain if parsed carelessly stay ordinary, ignored keys.
+        inherited = guide_with_outcomes()
+        inherited["outcomes"][0]["__proto__"] = {"detail": 1}
+        inherited["outcomes"][1]["constructor"] = 1
+        inherited["__proto__"] = {"outcomes": 5}
+        payloads.append(inherited)
+
+        # Feed the browser through JSON.parse, exactly like an imported or embedded guide.
+        browser = run_viewer_probe(
+            "const payloads = JSON.parse(%s);\nprocess.stdout.write(JSON.stringify(payloads.map(validateGuideInBrowser)));"
+            % json.dumps(json.dumps(payloads))
+        )
+        python = [module.validate_guide(payload) for payload in payloads]
+
+        blank_start = 3 + len(INVALID_OUTCOME_CASES)
+        blank_results = python[blank_start : blank_start + len(module.BLANK_CHARS)]
+        self.assertEqual(python[:2], [[], []])
+        self.assertTrue(all(errors for errors in python[2:blank_start]))
+        self.assertEqual(
+            blank_results,
+            [["outcomes[0].title must be a non-empty string"]] * len(module.BLANK_CHARS),
+        )
+        self.assertEqual(python[-4:], [[], [], [], []])
+        self.assertEqual(python, browser)
+
+    @unittest.skipUnless(shutil.which("node"), "Node.js is unavailable for render tests")
+    def test_outcome_section_groups_items_and_omits_empty_parts(self):
+        probes = r"""
+class FakeText { constructor(text){ this.data = String(text); } get textContent(){ return this.data; } }
+class FakeElement {
+  constructor(tag){ this.tagName = tag; this.className = ""; this.id = ""; this.attrs = {}; this.childNodes = []; this.own = ""; }
+  appendChild(child){ this.childNodes.push(child); return child; }
+  setAttribute(name, value){ this.attrs[name] = String(value); }
+  set textContent(value){ this.childNodes = []; this.own = String(value); }
+  get textContent(){ return this.own + this.childNodes.map(child => child.textContent).join(""); }
+}
+globalThis.document = {
+  createElement: tag => new FakeElement(tag),
+  createTextNode: text => new FakeText(text)
+};
+function dump(node){
+  if(node === null) return null;
+  if(node instanceof FakeText) return node.data;
+  return {tag:node.tagName, cls:node.className, id:node.id, attrs:node.attrs, href:node.href || null,
+          own:node.own, text:node.textContent, children:node.childNodes.map(dump)};
+}
+REFS = [{title:"课程主页"}];
+const mixed = [
+  {kind:"能力", title:"A 能做", check:"自检 A"},
+  {kind:"知识", title:"B 懂得[1]", detail:"阶段 1"},
+  {kind:"能力", title:"C 能做"}
+];
+process.stdout.write(JSON.stringify({
+  full: dump(renderOutcomes("大致水平[1]", mixed)),
+  knowledgeOnly: dump(renderOutcomes(undefined, [mixed[1]])),
+  abilityOnly: dump(renderOutcomes(undefined, [mixed[0], mixed[2]])),
+  summaryOnly: dump(renderOutcomes("只有水平说明", [])),
+  absent: dump(renderOutcomes(undefined, undefined)),
+  emptyList: dump(renderOutcomes(undefined, [])),
+  blankSummary: dump(renderOutcomes(" \u3000", [])),
+  blankParts: dump(renderOutcomes(undefined, [{kind:"知识", title:"T", detail:" \u3000", check:"\n"}]))
+}));
+"""
+        result = run_viewer_probe(probes)
+
+        full = result["full"]
+        self.assertEqual((full["tag"], full["cls"]), ("section", "outcomes"))
+        self.assertEqual(full["attrs"]["aria-labelledby"], "outcomes-title")
+        heading, summary, groups = full["children"]
+        self.assertEqual((heading["tag"], heading["id"], heading["text"]), ("h2", "outcomes-title", "🎯 学成之后"))
+        self.assertEqual((summary["cls"], summary["text"]), ("outcomes-summary", "大致水平[1]"))
+        self.assertEqual(summary["children"][1]["cls"], "cite")
+        self.assertEqual(summary["children"][1]["children"][0]["href"], "#ref-1")
+        self.assertEqual(
+            [group["cls"] for group in groups["children"]],
+            ["outcome-group knowledge", "outcome-group ability"],
+        )
+        knowledge, ability = groups["children"]
+        self.assertEqual(knowledge["children"][0]["text"], "🧠 你会懂得")
+        self.assertEqual(ability["children"][0]["text"], "🛠 你能做到")
+        self.assertEqual(
+            [item["children"][0]["text"] for item in ability["children"][1]["children"]],
+            ["A 能做", "C 能做"],
+        )
+        first_ability = ability["children"][1]["children"][0]
+        check = first_ability["children"][1]
+        self.assertEqual(check["cls"], "outcome-check")
+        self.assertEqual((check["children"][0]["cls"], check["children"][0]["text"]), ("check-label", "自检"))
+        self.assertEqual(check["children"][1]["cls"], "sr-only")
+        self.assertEqual(check["text"], "自检：自检 A")
+        knowledge_item = knowledge["children"][1]["children"][0]
+        self.assertEqual(
+            [child["cls"] for child in knowledge_item["children"]], ["outcome-title", "outcome-detail"]
+        )
+
+        self.assertEqual(
+            [group["cls"] for group in result["knowledgeOnly"]["children"][1]["children"]],
+            ["outcome-group knowledge"],
+        )
+        self.assertEqual(
+            [group["cls"] for group in result["abilityOnly"]["children"][1]["children"]],
+            ["outcome-group ability"],
+        )
+        self.assertEqual(
+            [child["cls"] for child in result["summaryOnly"]["children"]], ["", "outcomes-summary"]
+        )
+        blank_item = result["blankParts"]["children"][1]["children"][0]["children"][1]["children"][0]
+        self.assertEqual([child["cls"] for child in blank_item["children"]], ["outcome-title"])
+        for key in ("absent", "emptyList", "blankSummary"):
+            with self.subTest(key=key):
+                self.assertIsNone(result[key])
+
+    def test_outcome_section_sits_between_route_and_references(self):
+        viewer = VIEWER.read_text(encoding="utf-8")
+        body = viewer.split("function render(data){", 1)[1].split("\nfunction ", 1)[0]
+        route = body.index("rt.appendChild(richP(null, data.route));")
+        outcomes = body.index("renderOutcomes(data.outcomes_summary, data.outcomes)")
+        references = body.index("renderReferences(REFS)")
+        self.assertLess(route, outcomes)
+        self.assertLess(outcomes, references)
+
+
 if __name__ == "__main__":
     unittest.main()
