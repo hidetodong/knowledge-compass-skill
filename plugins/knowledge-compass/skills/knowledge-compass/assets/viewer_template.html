@@ -48,6 +48,12 @@
   .disc-row .lab{font-size:12.5px;opacity:.8;color:var(--hero-ink)}
   .disc{background:rgba(176,141,63,.16);border:1px solid rgba(176,141,63,.50);
     color:#f0e7d4;border-radius:6px;padding:2px 11px;font-size:12.5px;font-weight:600}
+  .class-row .disc{max-width:100%;overflow-wrap:anywhere}
+  .class-row .code{font-variant-numeric:tabular-nums;font-weight:500;opacity:.72;margin-right:6px}
+  .class-row a.disc{text-decoration:none}
+  .class-row a.disc::after{content:" ↗";content:" ↗" / "";opacity:.7}
+  .class-row a.disc:hover{text-decoration:underline;text-underline-offset:3px}
+  .class-row a.disc:focus-visible{outline:3px solid var(--signal-coral);outline-offset:3px}
   .legend{display:flex;flex-wrap:wrap;gap:14px;margin:16px 2px 0;font-size:12.5px;color:var(--muted)}
   .legend span{display:inline-flex;align-items:center;gap:5px}
   .dot{width:10px;height:10px;border-radius:3px;display:inline-block}
@@ -297,6 +303,9 @@ const OUTCOME_GROUPS = [
   {kind:"能力", cls:"ability",   label:"🛠 你能做到"}
 ];
 const OUTCOME_KINDS = OUTCOME_GROUPS.map(group => group.kind);
+// 学科分类标签只校验写法，与 view_field_guide.py 的 ISCED_CODE_RE / WIKIDATA_QID_RE 一致（仅 ASCII 数字）。
+const ISCED_CODE_RE = /^[0-9]{4}$/;
+const WIKIDATA_QID_RE = /^Q[1-9][0-9]*$/;
 // 空白判定用显式字符表，与 view_field_guide.py 的 BLANK_CHARS 一致（两端原生 trim/strip 的空白集合不同）。
 const BLANK_TEXT_RE = /^[\t\n\v\f\r\x1c-\x1f \x85\xa0\u1680\u2000-\u200a\u2028\u2029\u202f\u205f\u3000\ufeff]*$/;
 
@@ -580,6 +589,44 @@ function validateGuideInBrowser(data){
     if(!Array.isArray(value) || value.some(item => typeof item !== "string")){
       errors.push(key + " must be an array of strings");
     }
+  });
+
+  return errors.concat(validateClassificationInBrowser(data));
+}
+
+function validateClassificationInBrowser(data){
+  if(!Object.prototype.hasOwnProperty.call(data,"classification")) return [];
+  const classification = data.classification;
+  if(!isRecord(classification)) return ["classification must be an object"];
+
+  const errors = [];
+  [
+    ["isced","code",ISCED_CODE_RE,"must be a 4-digit string"],
+    ["subjects","qid",WIKIDATA_QID_RE,"must be a Wikidata id like Q123"]
+  ].forEach(([group, idKey, idRe, idMessage]) => {
+    if(!Object.prototype.hasOwnProperty.call(classification, group)) return;
+    const items = classification[group];
+    const groupPath = "classification." + group;
+    if(!Array.isArray(items)){
+      errors.push(groupPath + " must be an array");
+      return;
+    }
+    items.forEach((item, index) => {
+      const path = groupPath + "[" + index + "]";
+      if(!isRecord(item)){
+        errors.push(path + " must be an object");
+        return;
+      }
+      const own = key => Object.prototype.hasOwnProperty.call(item, key) ? item[key] : undefined;
+      const identifier = own(idKey);
+      if(typeof identifier !== "string" || !idRe.test(identifier)){
+        errors.push(path + "." + idKey + " " + idMessage);
+      }
+      const name = own("name");
+      if(typeof name !== "string" || BLANK_TEXT_RE.test(name)){
+        errors.push(path + ".name must be a non-empty string");
+      }
+    });
   });
   return errors;
 }
@@ -1123,6 +1170,35 @@ function renderOutcomes(summary, outcomes){
   return box;
 }
 
+// 学科分类：粗层 ISCED-F 代码 + 中文名，细层链到维基数据条目；链接只由校验过的编号拼出。
+function renderClassification(classification){
+  if(!isRecord(classification)) return null;
+  const own = (record, key) => Object.prototype.hasOwnProperty.call(record, key) ? record[key] : undefined;
+  const items = key => { const list = own(classification, key); return Array.isArray(list) ? list : []; };
+  const named = item => typeof own(item, "name") === "string" && !BLANK_TEXT_RE.test(own(item, "name"));
+  const valid = (item, key, pattern) => isRecord(item) && named(item) &&
+    typeof own(item, key) === "string" && pattern.test(own(item, key));
+
+  const row = el("div","disc-row class-row");
+  row.appendChild(el("span","lab","🏷 学科分类"));
+  items("isced").forEach(item => {
+    if(!valid(item, "code", ISCED_CODE_RE)) return;
+    const tag = el("span","disc isced");
+    tag.appendChild(el("span","code", item.code));
+    tag.appendChild(document.createTextNode(item.name));
+    row.appendChild(tag);
+  });
+  items("subjects").forEach(item => {
+    if(!valid(item, "qid", WIKIDATA_QID_RE)) return;
+    const link = el("a","disc subject", item.name);
+    link.href = "https://www.wikidata.org/wiki/" + item.qid;
+    link.target = "_blank"; link.rel = "noopener noreferrer";
+    link.title = "维基数据 " + item.qid;
+    row.appendChild(link);
+  });
+  return row.childNodes.length > 1 ? row : null;
+}
+
 function infoCard(cls, title, text){
   const c = el("div", "info" + (cls ? (" " + cls) : ""));
   c.appendChild(el("h2", null, title));
@@ -1161,6 +1237,8 @@ function render(data){
     data.disciplines.forEach(d => dr.appendChild(el("span","disc", d)));
     hero.appendChild(dr);
   }
+  const classRow = renderClassification(data.classification);
+  if(classRow) hero.appendChild(classRow);
   app.appendChild(hero);
 
   // 优先级图例

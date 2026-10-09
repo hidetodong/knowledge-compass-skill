@@ -51,10 +51,10 @@ class DistributionTests(unittest.TestCase):
         claude_plugin = load_json("plugins/knowledge-compass/.claude-plugin/plugin.json")
         codex_plugin = load_json("plugins/knowledge-compass/.codex-plugin/plugin.json")
 
-        self.assertEqual(claude_marketplace["metadata"]["version"], "0.6.0")
-        self.assertEqual(claude_marketplace["plugins"][0]["version"], "0.6.0")
-        self.assertEqual(claude_plugin["version"], "0.6.0")
-        self.assertEqual(codex_plugin["version"], "0.6.0")
+        self.assertEqual(claude_marketplace["metadata"]["version"], "0.7.0")
+        self.assertEqual(claude_marketplace["plugins"][0]["version"], "0.7.0")
+        self.assertEqual(claude_plugin["version"], "0.7.0")
+        self.assertEqual(codex_plugin["version"], "0.7.0")
 
     def test_there_is_one_canonical_skill(self):
         skill_files = sorted((REPO_ROOT / "plugins").rglob("SKILL.md"))
@@ -125,6 +125,30 @@ class DistributionTests(unittest.TestCase):
         for case in evals["evals"]:
             with self.subTest(eval_id=case["id"]):
                 self.assertTrue(any("学成之后" in item for item in case["assertions"]))
+
+    def test_classification_contract_is_explicit(self):
+        skill = (SKILL_ROOT / "SKILL.md").read_text(encoding="utf-8")
+        readme = (REPO_ROOT / "README.md").read_text(encoding="utf-8")
+        evals = json.loads((SKILL_ROOT / "evals" / "evals.json").read_text(encoding="utf-8"))
+        for value in (
+            "`classification`",
+            "`isced`",
+            "`subjects`",
+            "`qid`",
+            "https://www.uis.unesco.org/sites/default/files/medias/fichiers/2025/04/"
+            "international-standard-classification-of-education-fields-of-education-and-training-"
+            "2013-detailed-field-descriptions-2015-en.pdf",
+            "https://www.wikidata.org/w/api.php?action=wbsearchentities",
+            "查不到就不写那一项，绝不凭记忆写代码或编号",
+            "学科分类（ISCED 代码与中文名、细分学科与维基数据编号）",
+        ):
+            with self.subTest(value=value):
+                self.assertIn(value, skill)
+        self.assertIn("ISCED-F 2013", readme)
+        self.assertIn("Wikidata", readme)
+        for case in evals["evals"]:
+            with self.subTest(eval_id=case["id"]):
+                self.assertTrue(any("classification" in item for item in case["assertions"]))
 
     def test_offline_viewer_is_packaged_self_contained_and_accessible(self):
         viewer = VIEWER.read_text(encoding="utf-8")

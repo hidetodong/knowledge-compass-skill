@@ -3,7 +3,7 @@ name: knowledge-compass
 description: This skill should be used when the user has a handful of scattered, unfamiliar terms or jargon they ran into somewhere and wants to figure out what field they belong to, where the authoritative/trustworthy knowledge on that field lives, and how to start learning it — e.g. "我最近老听到 X、Y、Z 这几个词，不知道是什么领域", "these buzzwords keep coming up, what domain is this and how do I get into it", "reverse-engineer the field from these terms and give me a learning roadmap", "这些名词属于哪个领域？有哪些权威资料和学习路径". It reverse-infers the domain from the terms (confirming candidates with the user when ambiguous), researches verified authoritative sources, and produces a source-verified learning path as local JSON plus self-contained HTML or structured Markdown, with automatic archiving when Python 3.8+ is available. Trigger even when the user doesn't say "domain", "field", or "learning path" — any time they have orphan terminology and want to know the field plus where to learn it authoritatively.
 license: MIT
 metadata:
-  version: "0.6.0"
+  version: "0.7.0"
   author: "hidetodong"
   compatibility: "Claude Code; Codex; modern browser; Python 3.8+ optional"
 ---
@@ -74,11 +74,15 @@ metadata:
   - **每条都必须能追溯到 `plan` 的阶段或 `layers` 的资源**，深浅和路线相称：路线没教的不写，三个月的入门路线不写成专家水平。
   - ❌「精通期权交易」「理解金融」（夸大或空泛）　✅ 知识类「能解释为什么临近到期时平值期权的 gamma 会变大」，自检：「不看书，能给朋友讲清楚 gamma 和到期时间的关系」；能力类「能读懂一张期权报价表，算出一笔备兑开仓的盈亏平衡点」，自检：「随手找一张真实报价表，五分钟内算对」。
 
-再做三件事，让成品**点明领域、可溯来源、可看依赖**：
+再做四件事，让成品**点明领域、可溯来源、可看依赖、可按学科归类**：
 
 - **标题直接点明领域**（不要泛泛）。`topic` 一律以反推出的**领域 + 分支**领衔，并填 `domain` 眉题——网页会把它渲染成大标题上方的醒目金色眉题。例如碎片是「集体表象、社会事实、失范」，就不是写「集体表象」，而是 `domain: "社会学 · 古典社会学理论"`、`topic: "涂尔干学派：集体表象与社会事实"`。读者第一眼就知道这是哪个学科。
 - **引用要可溯**（绑定反幻觉，第一纪律的延伸）。凡正文里的**分析性结论**——领域速览、领域判断、某来源"为什么权威"、前置判断、学成之后的水平说明与收获——只要是从某个出处得来的，就在该处写 `[1]`、`[2]` 角标，并在顶层 `references` 数组里按序登记出处（`title` / `source` / `url` / 可选 `note`）。网页把它们渲染成页面**最下方的编号「参考来源」区**，角标可点击跳转。这让"这个判断从哪来"一查即知，而不是凭空断言。`references` 里的出处同样适用反幻觉纪律：核实存在才登记。
 - **资源有先后就给依赖**（驱动流程树）。当来源之间存在明确的**学习先后**（要先读完 A 才啃得动 B）时，给每个相关来源一个稳定 `id`，并在后置来源上填 `requires: [前置的 id, …]`。网页据此提供「📚 分层视图 / 🌳 学习路线树」切换：树里按依赖分层、画连线箭头（顶层=可任意起步）。注意 `requires`（资源→资源依赖）与 `prereq`（该来源需要的背景知识，自由文本）是两回事，别混填。没有清晰先后关系就别硬造——不填 `requires`，切换按钮就不出现。
+- **打学科分类标签**（供以后按学科筛选归档库）。在顶层填 `classification`，分粗细两层。**只写核实过的，查不到就不写那一项，绝不凭记忆写代码或编号**——编出来的标签会让以后的筛选悄悄出错，比没有更糟。
+  - **粗层 `isced`**：对照联合国教科文组织的《国际教育标准分类：教育与培训领域》（ISCED-F 2013）细类说明（https://www.uis.unesco.org/sites/default/files/medias/fichiers/2025/04/international-standard-classification-of-education-fields-of-education-and-training-2013-detailed-field-descriptions-2015-en.pdf），选 1–2 个四位细类，主类放前面；只有指南确实横跨两个细类时才加第二个（比如基本面分析同时落在金融和会计）。抓取工具常读不出这份 PDF 的文字，读不出就下载下来、用本机已有的 PDF 文本工具抽出文字再查；还是读不到，就先不写粗层。每项写成 `{"code": "0314", "name": "社会学和文化研究"}`：`code` 是保留开头 0 的四位字符串，`name` 是中文译名。
+  - **细层 `subjects`**：挑 1–3 个最能代表这份指南的细分学科或核心概念，用**英文名**去维基数据（Wikidata，维基百科背后的结构化知识库）搜索：`https://www.wikidata.org/w/api.php?action=wbsearchentities&search=<英文名>&language=en&format=json`。中文搜索常常只搜出同名论文，所以用英文名；搜索词要做 URL 编码，并去掉维基百科标题里的括号限定词（`Greeks (finance)` 搜 `Greeks`）。在结果里挑描述是学科或概念的条目，避开同名的论文、期刊和人物。拿不准或有几个候选时，用 `https://www.wikidata.org/w/api.php?action=wbgetentities&ids=<编号>&props=labels|descriptions|sitelinks&languages=en&format=json` 看条目的描述和有没有英文维基百科文章，优先选有文章的那个，也可以打开 `https://www.wikidata.org/wiki/<编号>` 核对；接口连不上就按查不到处理。每项写成 `{"qid": "Q972877", "name": "社会事实"}`，`name` 用中文读者常用的叫法，不照搬条目自带的中文名（常是繁体、冷门译法，甚至译错）。
+  - `disciplines` 照旧写自由文本，可以比标签更细；以后筛选只认 `code` 和 `qid`，中文名只用来显示。
 
 ### Phase 4 — Deliver with the best available local path（按本机能力交付）
 
@@ -100,7 +104,7 @@ metadata:
 
 #### B. 没有兼容 Python：零安装离线浏览器
 
-1. 从同一 JSON 生成结构化 Markdown，至少完整保留：领域与置信度、原始碎片、领域判断、速览、前置知识、四层资源及其链接/优先级/核实状态、分阶段计划、学成之后（大致水平、你会懂得、你能做到及各自的自检标志）和参考来源。写到 JSON 旁；不要把 Markdown 当成新的真源。
+1. 从同一 JSON 生成结构化 Markdown，至少完整保留：领域与置信度、原始碎片、领域判断、速览、前置知识、学科分类（ISCED 代码与中文名、细分学科与维基数据编号）、四层资源及其链接/优先级/核实状态、分阶段计划、学成之后（大致水平、你会懂得、你能做到及各自的自检标志）和参考来源。写到 JSON 旁；不要把 Markdown 当成新的真源。
 2. 把 `<skill-dir>/assets/viewer_template.html` 原样复制到 JSON 旁，命名为 `knowledge-compass-viewer.html`。如果该路径已是本 skill 先前复制的 viewer，可更新它；如果是无法确认归属的文件，改用安全的数字后缀，绝不覆盖用户内容。
 3. 用宿主已有的本地浏览器能力打开复制出的 viewer。不要为此安装浏览器，也不要把文件上传到网站。
 4. 只给用户这段小白指引，并带上真实文件名：**“无需安装任何东西：在打开的「离线罗盘校准台」里选择或拖入这份 JSON，检查通过后点「导出独立 HTML」。”** 页面会在本机读取并校验 JSON，生成可单独保存、离线打开和分享的 HTML。
@@ -115,7 +119,7 @@ metadata:
 
 完整字段见 `scripts/view_field_guide.py` 顶部 docstring。要点：
 
-- **顶层**：`topic`（标题，以领域+分支领衔，如「涂尔干学派：集体表象与社会事实」）、`domain`（领域眉题，如「社会学 · 古典社会学理论」，渲染成大标题上方金色眉题）、`fragments`（用户原始碎片，原样照列）、`domain_judgment`（一行——哪些词共现锁定该领域）、`confidence`（高/中/低）、`excluded`（可选，被排除 / 不吻合的词；全吻合则省略）、`disciplines`（学科归属数组）、`overview`（2–4 句速览）、`prerequisites`（领域级前置）。正文字段（`overview`/`domain_judgment`/`excluded`/`prerequisites`/`outcomes_summary` 及各 `reason`/`plan.detail`/`route`/`outcomes` 的 `title`、`detail`、`check`）里可写 `[n]` 角标引用 `references`。
+- **顶层**：`topic`（标题，以领域+分支领衔，如「涂尔干学派：集体表象与社会事实」）、`domain`（领域眉题，如「社会学 · 古典社会学理论」，渲染成大标题上方金色眉题）、`fragments`（用户原始碎片，原样照列）、`domain_judgment`（一行——哪些词共现锁定该领域）、`confidence`（高/中/低）、`excluded`（可选，被排除 / 不吻合的词；全吻合则省略）、`disciplines`（学科归属数组，自由文本）、`classification`（可选，学科分类标签：`isced` 为 `{code, name}` 数组，`code` 是 ISCED-F 2013 四位细类代码字符串；`subjects` 为 `{qid, name}` 数组，`qid` 是维基数据编号如 `Q972877`。写法不对会直接渲染失败；代码和编号是否真实存在由研究时核实保证，渲染器不查）、`overview`（2–4 句速览）、`prerequisites`（领域级前置）。正文字段（`overview`/`domain_judgment`/`excluded`/`prerequisites`/`outcomes_summary` 及各 `reason`/`plan.detail`/`route`/`outcomes` 的 `title`、`detail`、`check`）里可写 `[n]` 角标引用 `references`。
 - **`layers`**：每层 `{emoji, title, subtitle, resources[]}`；4 层（入门 / 经典 / 进阶 / 实践），每层 2–4 个来源。
 - **每个 resource**：`name`（中英对照）、`meta`（作者，版本/年份）、`type`、`priority`（必读/推荐/可选）、`prereq`（背景知识，自由文本）、`reason`、`difficulty`、`audience`、`url`（仅 `http://` / `https://`）、`free`、`verified`（只有显式 `true` 才显示已核实）、`verify_note`；流程树相关：`id`（1–64 位小写字母、数字、`.`、`_`、`-` 组成的稳定键；不要用 `constructor` / `prototype` 等保留键）、`requires`（前置来源 id 数组，资源→资源依赖，与 `prereq` 不同）。
 - **`references`**：可溯出处数组 `{title, source, url, note}`，按序号对应正文 `[n]` 角标，渲染在页面最下方「参考来源」区；登记前同样须核实存在。

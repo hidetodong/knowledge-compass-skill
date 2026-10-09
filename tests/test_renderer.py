@@ -727,5 +727,378 @@ process.stdout.write(JSON.stringify({
         self.assertLess(outcomes, references)
 
 
+def guide_with_classification():
+    payload = valid_guide()
+    payload["classification"] = {
+        "isced": [{"code": "0541", "name": "数学"}, {"code": "0542", "name": "统计学"}],
+        "subjects": [{"qid": "Q5862903", "name": "概率论"}],
+    }
+    return payload
+
+
+FULLWIDTH_0412 = "".join(chr(0xFF10 + int(digit)) for digit in "0412")
+ARABIC_INDIC_0412 = "".join(chr(0x0660 + int(digit)) for digit in "0412")
+IDEOGRAPHIC_SPACE = chr(0x3000)
+CODE_ERROR = "classification.isced[0].code must be a 4-digit string"
+QID_ERROR = "classification.subjects[0].qid must be a Wikidata id like Q123"
+
+# Each case breaks one shape rule of `classification`; Python and the browser must report exactly
+# these errors. Non-ASCII digits and trailing newlines would slip past Python's \d and $.
+INVALID_CLASSIFICATION_CASES = (
+    (None, ["classification must be an object"]),
+    ([], ["classification must be an object"]),
+    ("0412", ["classification must be an object"]),
+    ({"isced": {"code": "0412", "name": "金融"}}, ["classification.isced must be an array"]),
+    ({"subjects": None}, ["classification.subjects must be an array"]),
+    ({"isced": ["0412"]}, ["classification.isced[0] must be an object"]),
+    ({"subjects": [None]}, ["classification.subjects[0] must be an object"]),
+    ({"isced": [{"code": "412", "name": "金融"}]}, [CODE_ERROR]),
+    ({"isced": [{"code": 412, "name": "金融"}]}, [CODE_ERROR]),
+    # A number with the right digit count must still fail on its type, not only on the pattern.
+    ({"isced": [{"code": 1234, "name": "金融"}]}, [CODE_ERROR]),
+    ({"isced": [{"code": "04120", "name": "金融"}]}, [CODE_ERROR]),
+    ({"isced": [{"code": "x0412", "name": "金融"}]}, [CODE_ERROR]),
+    ({"isced": [{"code": "0412 ", "name": "金融"}]}, [CODE_ERROR]),
+    ({"isced": [{"code": FULLWIDTH_0412, "name": "金融"}]}, [CODE_ERROR]),
+    ({"isced": [{"code": ARABIC_INDIC_0412, "name": "金融"}]}, [CODE_ERROR]),
+    ({"isced": [{"code": "0412\n", "name": "金融"}]}, [CODE_ERROR]),
+    ({"isced": [{"name": "金融"}]}, [CODE_ERROR]),
+    ({"subjects": [{"qid": "q123", "name": "概率论"}]}, [QID_ERROR]),
+    ({"subjects": [{"qid": "Q0123", "name": "概率论"}]}, [QID_ERROR]),
+    ({"subjects": [{"qid": "Q", "name": "概率论"}]}, [QID_ERROR]),
+    ({"subjects": [{"qid": "Q12a", "name": "概率论"}]}, [QID_ERROR]),
+    ({"subjects": [{"qid": "Q123\n", "name": "概率论"}]}, [QID_ERROR]),
+    ({"subjects": [{"qid": "Q" + FULLWIDTH_0412[1:], "name": "概率论"}]}, [QID_ERROR]),
+    # Prefixed ids and full entity URLs are the likeliest model slips; both ends must anchor the pattern.
+    ({"subjects": [{"qid": "wd:Q123", "name": "概率论"}]}, [QID_ERROR]),
+    ({"subjects": [{"qid": "https://www.wikidata.org/wiki/Q123", "name": "概率论"}]}, [QID_ERROR]),
+    ({"subjects": [{"qid": " Q123", "name": "概率论"}]}, [QID_ERROR]),
+    ({"subjects": [{"qid": 123, "name": "概率论"}]}, [QID_ERROR]),
+    ({"subjects": [{"name": "概率论"}]}, [QID_ERROR]),
+    (
+        {"subjects": [{"qid": "Q123", "name": ""}]},
+        ["classification.subjects[0].name must be a non-empty string"],
+    ),
+    (
+        {"isced": [{"code": "0412", "name": " " + IDEOGRAPHIC_SPACE + "\n"}]},
+        ["classification.isced[0].name must be a non-empty string"],
+    ),
+    ({"isced": [{"code": "0412"}]}, ["classification.isced[0].name must be a non-empty string"]),
+    (
+        {"subjects": [{"qid": "Q123", "name": 7}]},
+        ["classification.subjects[0].name must be a non-empty string"],
+    ),
+    # JSON.parse keeps "__proto__" as an ordinary key, so its contents must not count as the item's fields.
+    (
+        {"subjects": [{"__proto__": {"qid": "Q123", "name": "概率论"}}]},
+        [QID_ERROR, "classification.subjects[0].name must be a non-empty string"],
+    ),
+    (
+        {
+            "isced": [{"code": "0412", "name": "金融"}, {"code": 1, "name": ""}],
+            "subjects": [{"qid": "x"}],
+        },
+        [
+            "classification.isced[1].code must be a 4-digit string",
+            "classification.isced[1].name must be a non-empty string",
+            QID_ERROR,
+            "classification.subjects[0].name must be a non-empty string",
+        ],
+    ),
+)
+
+
+class ClassificationTests(unittest.TestCase):
+    def render(self, payload):
+        tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(tmp.cleanup)
+        root = Path(tmp.name)
+        path = root / "guide.json"
+        path.write_text(json.dumps(payload, ensure_ascii=False), encoding="utf-8")
+        return root, run_renderer(path, root / "library", "--no-archive")
+
+    @staticmethod
+    def embedded(root):
+        html = (root / "guide.html").read_text(encoding="utf-8")
+        match = re.search(
+            r'<script id="kc-guide-data" type="application/json">(.*?)</script>', html, re.DOTALL
+        )
+        return json.loads(match.group(1))
+
+    def test_classification_is_accepted_and_embedded_unchanged(self):
+        payload = guide_with_classification()
+        root, result = self.render(payload)
+
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(self.embedded(root)["classification"], payload["classification"])
+
+    def test_well_formed_but_unknown_identifiers_are_not_looked_up(self):
+        payload = guide_with_classification()
+        payload["classification"] = {
+            "isced": [{"code": "9999", "name": "不存在的细类"}],
+            "subjects": [{"qid": "Q999999999999", "name": "不存在的条目"}],
+        }
+        root, result = self.render(payload)
+
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(self.embedded(root)["classification"], payload["classification"])
+
+    def test_guides_without_classification_render_as_before(self):
+        root, result = self.render(valid_guide())
+
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertNotIn("classification", self.embedded(root))
+
+    def test_invalid_classification_is_rejected_before_any_output_is_written(self):
+        for value, expected in INVALID_CLASSIFICATION_CASES:
+            with self.subTest(value=value):
+                payload = valid_guide()
+                payload["classification"] = value
+                root, result = self.render(payload)
+
+                self.assertEqual(result.returncode, 2)
+                for message in expected:
+                    self.assertIn(message, result.stderr)
+                self.assertFalse((root / "guide.html").exists())
+
+    @unittest.skipUnless(shutil.which("node"), "Node.js is unavailable for validator parity")
+    def test_python_and_browser_report_identical_classification_errors(self):
+        spec = importlib.util.spec_from_file_location("view_field_guide", RENDERER)
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+
+        valid = [valid_guide(), guide_with_classification()]
+        for value in (
+            {},
+            {"isced": [], "subjects": []},
+            {"isced": [{"code": "9999", "name": "x"}], "subjects": [{"qid": "Q999999999999", "name": "y"}]},
+            # Unknown keys are ignored, like everywhere else in the guide schema.
+            {"isced": [{"code": "0412", "name": "金融", "note": 1}], "other": 5},
+        ):
+            payload = valid_guide()
+            payload["classification"] = value
+            valid.append(payload)
+        # Keys that would touch the prototype chain if parsed carelessly stay ordinary, ignored keys.
+        inherited = guide_with_classification()
+        inherited["classification"]["__proto__"] = {"isced": 5}
+        inherited["classification"]["isced"][0]["constructor"] = 1
+        inherited["classification"]["subjects"][0]["__proto__"] = {"qid": 5}
+        valid.append(inherited)
+        outer = valid_guide()
+        outer["__proto__"] = {"classification": 5}
+        valid.append(outer)
+
+        invalid = []
+        for value, _ in INVALID_CLASSIFICATION_CASES:
+            payload = valid_guide()
+            payload["classification"] = value
+            invalid.append(payload)
+
+        # Every character either runtime calls whitespace is blank; look-alikes are not.
+        blank, lookalike = [], []
+        for chars, bucket in ((module.BLANK_CHARS, blank), (chr(0x200B) + chr(0x180E) + "a", lookalike)):
+            for char in chars:
+                payload = guide_with_classification()
+                payload["classification"]["subjects"][0]["name"] = char * 2
+                bucket.append(payload)
+
+        payloads = valid + invalid + blank + lookalike
+        # Feed the browser through JSON.parse, exactly like an imported or embedded guide.
+        browser = run_viewer_probe(
+            "const payloads = JSON.parse(%s);\nprocess.stdout.write(JSON.stringify(payloads.map(validateGuideInBrowser)));"
+            % json.dumps(json.dumps(payloads))
+        )
+        python = [module.validate_guide(payload) for payload in payloads]
+
+        self.assertEqual(python[: len(valid)], [[]] * len(valid))
+        self.assertEqual(
+            python[len(valid) : len(valid) + len(invalid)],
+            [expected for _, expected in INVALID_CLASSIFICATION_CASES],
+        )
+        self.assertEqual(
+            python[len(valid) + len(invalid) : len(valid) + len(invalid) + len(blank)],
+            [["classification.subjects[0].name must be a non-empty string"]] * len(blank),
+        )
+        self.assertEqual(python[-len(lookalike) :], [[]] * len(lookalike))
+        self.assertEqual(python, browser)
+
+    @unittest.skipUnless(shutil.which("node"), "Node.js is unavailable for validator parity")
+    def test_browser_ignores_classification_fields_inherited_from_the_prototype(self):
+        probes = r"""
+globalThis.document = {
+  createElement: tag => ({tagName: tag, childNodes: [], appendChild(child){ this.childNodes.push(child); return child; }}),
+  createTextNode: text => ({data: String(text)})
+};
+const polluted = ["classification","isced","subjects","code","qid","name"];
+const values = {classification: 5, isced: 5, subjects: 5, code: "0412", qid: "Q1", name: "继承来的"};
+polluted.forEach(key => Object.defineProperty(Object.prototype, key, {value: values[key], configurable: true, writable: true}));
+const result = {
+  noClassification: validateGuideInBrowser({topic:"t", layers:[{resources:[]}], references:[], plan:[], fragments:[], disciplines:[]}),
+  emptyItems: validateClassificationInBrowser({classification: {isced: [{}], subjects: [{}]}}),
+  emptyGroups: validateClassificationInBrowser({classification: {}}),
+  rendered: renderClassification({isced: [{}], subjects: [{}]})
+};
+polluted.forEach(key => delete Object.prototype[key]);
+process.stdout.write(JSON.stringify(result));
+"""
+        result = run_viewer_probe(probes)
+
+        self.assertEqual(result["noClassification"], [])
+        self.assertEqual(
+            result["emptyItems"],
+            [
+                CODE_ERROR,
+                "classification.isced[0].name must be a non-empty string",
+                QID_ERROR,
+                "classification.subjects[0].name must be a non-empty string",
+            ],
+        )
+        self.assertEqual(result["emptyGroups"], [])
+        self.assertIsNone(result["rendered"])
+
+    @unittest.skipUnless(shutil.which("node"), "Node.js is unavailable for render tests")
+    def test_classification_row_shows_both_layers_and_omits_empty_parts(self):
+        probes = r"""
+class FakeText { constructor(text){ this.data = String(text); } get textContent(){ return this.data; } }
+class FakeElement {
+  constructor(tag){ this.tagName = tag; this.className = ""; this.childNodes = []; this.own = ""; }
+  appendChild(child){ this.childNodes.push(child); return child; }
+  set textContent(value){ this.childNodes = []; this.own = String(value); }
+  get textContent(){ return this.own + this.childNodes.map(child => child.textContent).join(""); }
+}
+globalThis.document = {
+  createElement: tag => new FakeElement(tag),
+  createTextNode: text => new FakeText(text)
+};
+function dump(node){
+  if(node === null) return null;
+  if(node instanceof FakeText) return node.data;
+  return {tag:node.tagName, cls:node.className, own:node.own, text:node.textContent,
+          href:node.href || null, target:node.target || null, rel:node.rel || null, title:node.title || null,
+          children:node.childNodes.map(dump)};
+}
+const isced = [{code:"0541", name:"数学"}, {code:"0542", name:"<b>统计学</b>"}];
+const subjects = [{qid:"Q5862903", name:"概率论"}];
+process.stdout.write(JSON.stringify({
+  both: dump(renderClassification({isced, subjects})),
+  iscedOnly: dump(renderClassification({isced})),
+  subjectsOnly: dump(renderClassification({subjects})),
+  emptyLists: dump(renderClassification({isced: [], subjects: []})),
+  absent: dump(renderClassification(undefined)),
+  malformed: dump(renderClassification({isced: [{code:"412", name:"金融"}], subjects: [{qid:"q1", name:"x"}, {qid:"Q1", name:" "}]}))
+}));
+"""
+        result = run_viewer_probe(probes)
+
+        both = result["both"]
+        self.assertEqual((both["tag"], both["cls"]), ("div", "disc-row class-row"))
+        label, math, statistics, subject = both["children"]
+        self.assertEqual((label["cls"], label["text"]), ("lab", "🏷 学科分类"))
+        for tag, code, name in ((math, "0541", "数学"), (statistics, "0542", "<b>统计学</b>")):
+            with self.subTest(code=code):
+                self.assertEqual((tag["tag"], tag["cls"]), ("span", "disc isced"))
+                self.assertEqual(tag["children"][0]["cls"], "code")
+                self.assertEqual(tag["children"][0]["text"], code)
+                self.assertEqual(tag["children"][1], name)
+        self.assertEqual((subject["tag"], subject["cls"], subject["text"]), ("a", "disc subject", "概率论"))
+        self.assertEqual(subject["href"], "https://www.wikidata.org/wiki/Q5862903")
+        self.assertEqual(subject["target"], "_blank")
+        self.assertEqual(subject["rel"], "noopener noreferrer")
+        self.assertEqual(subject["title"], "维基数据 Q5862903")
+
+        self.assertEqual(
+            [child["cls"] for child in result["iscedOnly"]["children"]],
+            ["lab", "disc isced", "disc isced"],
+        )
+        self.assertEqual(
+            [child["cls"] for child in result["subjectsOnly"]["children"]], ["lab", "disc subject"]
+        )
+        for key in ("emptyLists", "absent", "malformed"):
+            with self.subTest(key=key):
+                self.assertIsNone(result[key])
+
+    def test_classification_row_sits_under_disciplines_inside_the_hero(self):
+        viewer = VIEWER.read_text(encoding="utf-8")
+        body = viewer.split("function render(data){", 1)[1].split("\nfunction ", 1)[0]
+        disciplines = body.index('el("span","lab","📚 学科归属")')
+        classification = body.index("const classRow = renderClassification(data.classification);")
+        attached = body.index("if(classRow) hero.appendChild(classRow);")
+        hero = body.index("app.appendChild(hero);")
+        self.assertLess(disciplines, classification)
+        self.assertLess(classification, attached)
+        self.assertLess(attached, hero)
+
+    def test_library_index_carries_only_validated_classification_fields(self):
+        spec = importlib.util.spec_from_file_location("view_field_guide", RENDERER)
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+        with tempfile.TemporaryDirectory() as tmp:
+            library = Path(tmp)
+            tagged = guide_with_classification()
+            expected = json.loads(json.dumps(tagged["classification"]))
+            # Unknown keys pass validation but must not reach the index, least of all "__proto__".
+            tagged["classification"]["__proto__"] = {"isced": [{"code": "<b>x</b>", "name": 5}]}
+            tagged["classification"]["notes"] = "旁注"
+            tagged["classification"]["isced"][0]["url"] = "javascript:alert(1)"
+            tagged["classification"]["subjects"][0]["__proto__"] = {"qid": "javascript:alert(1)"}
+            untagged = valid_guide()
+            untagged["topic"] = "统计学入门"
+            for name, guide in (("tagged", tagged), ("untagged", untagged)):
+                (library / f"{name}.json").write_text(
+                    json.dumps(guide, ensure_ascii=False), encoding="utf-8"
+                )
+                (library / f"{name}.html").write_text("ok", encoding="utf-8")
+
+            index_path, count = module.build_index(library)
+            index = index_path.read_text(encoding="utf-8")
+
+        self.assertEqual(count, 2)
+        literal = re.search(r"const DATA = (.*?);\n", index).group(1)
+        by_topic = {entry["topic"]: entry for entry in json.loads(literal)}
+        self.assertEqual(by_topic["概率论入门"]["classification"], expected)
+        self.assertEqual(by_topic["统计学入门"]["classification"], {})
+
+        if shutil.which("node"):
+            # Evaluate the payload the way index.html does: as an object literal, not via JSON.parse.
+            probe = (
+                "const DATA = %s;\n"
+                "const tags = DATA.find(entry => entry.topic === \"概率论入门\").classification;\n"
+                "process.stdout.write(JSON.stringify({keys: Object.keys(tags),\n"
+                "  plainProto: Object.getPrototypeOf(tags) === Object.prototype,\n"
+                "  itemProtos: tags.subjects.every(item => Object.getPrototypeOf(item) === Object.prototype),\n"
+                "  isced: tags.isced}));" % literal
+            )
+            with tempfile.TemporaryDirectory() as tmp:
+                runner = Path(tmp) / "index-probe.js"
+                runner.write_text(probe, encoding="utf-8")
+                result = subprocess.run(
+                    [shutil.which("node"), str(runner)], stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+                    text=True, check=False,
+                )
+            self.assertEqual(result.returncode, 0, result.stderr)
+            evaluated = json.loads(result.stdout)
+            self.assertEqual(evaluated["keys"], ["isced", "subjects"])
+            self.assertTrue(evaluated["plainProto"])
+            self.assertTrue(evaluated["itemProtos"])
+            self.assertEqual(evaluated["isced"], expected["isced"])
+
+    def test_library_index_skips_guides_with_malformed_classification(self):
+        spec = importlib.util.spec_from_file_location("view_field_guide", RENDERER)
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+        with tempfile.TemporaryDirectory() as tmp:
+            library = Path(tmp)
+            broken = guide_with_classification()
+            broken["classification"]["subjects"][0]["qid"] = "wd:Q5862903"
+            (library / "broken.json").write_text(json.dumps(broken, ensure_ascii=False), encoding="utf-8")
+            (library / "broken.html").write_text("ok", encoding="utf-8")
+
+            index_path, count = module.build_index(library)
+            index = index_path.read_text(encoding="utf-8")
+
+        self.assertEqual(count, 0)
+        self.assertEqual(json.loads(re.search(r"const DATA = (.*?);\n", index).group(1)), [])
+
+
 if __name__ == "__main__":
     unittest.main()
