@@ -37,6 +37,12 @@ The JSON schema (all fields optional except topic + layers):
   "confidence": "高",                            # 高 / 中 / 低，hero 里显示为置信度
   "excluded": "（可选）被排除的候选 / 不吻合的词；全部吻合则省略",
   "disciplines": ["数学 · 概率论", "数理统计"],   # 领域横跨的学科门类
+  # （可选）学科分类标签，供以后按学科筛选：粗层 isced 为 ISCED-F 2013 四位细类代码（字符串）+ 中文名，
+  # 细层 subjects 为维基数据条目编号 + 常用中文名。只校验写法，不核对代码或编号是否真实存在。
+  "classification": {
+    "isced": [{"code": "0541", "name": "数学"}],
+    "subjects": [{"qid": "Q5862903", "name": "概率论"}]
+  },
   "overview": "2-4 句领域速览",
   "prerequisites": "学这个领域整体需要的前置知识（如 微积分），显示为独立小卡片",
   "layers": [
@@ -111,6 +117,10 @@ RESERVED_RESOURCE_IDS = {"__proto__", "prototype", "constructor"}
 HTTP_SCHEME_RE = re.compile(r"^https?://", re.IGNORECASE)
 FORBIDDEN_AUTHORITY_CHARS = frozenset('<>"`{}|^')
 OUTCOME_KINDS = ("知识", "能力")
+# ASCII-only on purpose: Python's \d also accepts non-ASCII digits and $ tolerates a trailing
+# newline, while the browser's mirrored patterns accept neither. Always use fullmatch().
+ISCED_CODE_RE = re.compile(r"[0-9]{4}")
+WIKIDATA_QID_RE = re.compile(r"Q[1-9][0-9]*")
 # Python str.strip() and JavaScript trim() disagree on "whitespace" (\x1c-\x1f and \x85 vs \ufeff).
 # Blank checks use this explicit union instead; the viewer's BLANK_TEXT_RE mirrors it.
 BLANK_CHARS = (
@@ -406,6 +416,42 @@ def validate_guide(data):
         if not isinstance(value, list) or any(not isinstance(item, str) for item in value):
             errors.append(f"{key} must be an array of strings")
 
+    errors.extend(validate_classification(data))
+    return errors
+
+
+def validate_classification(data):
+    """Check only the shape of the optional subject tags; codes and ids are never looked up."""
+    if "classification" not in data:
+        return []
+    classification = data["classification"]
+    if not isinstance(classification, dict):
+        return ["classification must be an object"]
+
+    errors = []
+    groups = (
+        ("isced", "code", ISCED_CODE_RE, "must be a 4-digit string"),
+        ("subjects", "qid", WIKIDATA_QID_RE, "must be a Wikidata id like Q123"),
+    )
+    for group, id_key, id_re, id_message in groups:
+        if group not in classification:
+            continue
+        items = classification[group]
+        group_path = f"classification.{group}"
+        if not isinstance(items, list):
+            errors.append(f"{group_path} must be an array")
+            continue
+        for index, item in enumerate(items):
+            path = f"{group_path}[{index}]"
+            if not isinstance(item, dict):
+                errors.append(f"{path} must be an object")
+                continue
+            identifier = item.get(id_key)
+            if not isinstance(identifier, str) or id_re.fullmatch(identifier) is None:
+                errors.append(f"{path}.{id_key} {id_message}")
+            name = item.get("name")
+            if not isinstance(name, str) or is_blank_text(name):
+                errors.append(f"{path}.name must be a non-empty string")
     return errors
 
 
@@ -504,6 +550,21 @@ def inline(template_path, placeholder, payload_obj):
     return tpl.replace(placeholder, payload, 1)
 
 
+def index_classification(data):
+    """Project the subject tags onto their validated fields for the library index.
+
+    The index embeds its data as a JavaScript object literal, where a "__proto__" key would
+    become the object's prototype, so unknown keys are dropped instead of carried along.
+    Callers pass only guides that already passed validate_guide().
+    """
+    classification = data.get("classification") or {}
+    projected = {}
+    for group, id_key in (("isced", "code"), ("subjects", "qid")):
+        if group in classification:
+            projected[group] = [{id_key: item[id_key], "name": item["name"]} for item in classification[group]]
+    return projected
+
+
 def index_entry(data, html_name, mtime):
     sources = [r for layer in data.get("layers", []) for r in layer.get("resources", [])]
     return {
@@ -511,6 +572,8 @@ def index_entry(data, html_name, mtime):
         "domain": data.get("domain", "") or "",
         "confidence": data.get("confidence", ""),
         "disciplines": data.get("disciplines", []) or [],
+        # Kept for future subject filtering; build_index only admits validated guides.
+        "classification": index_classification(data),
         # Encode every filename byte so even an unusual name beginning with
         # "javascript:" remains a relative file link in the generated index.
         "html": quote(html_name, safe=""),

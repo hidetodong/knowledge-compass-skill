@@ -11,7 +11,8 @@ Knowledge Compass is an Agent Skill for **Claude Code** and **Codex**. Give it a
 3. Verifies books, papers, courses, standards, and institutional sources.
 4. Builds a staged learning route with prerequisites and source dependencies.
 5. Ends the route with what you will roughly know and be able to do after finishing it, each item with a self-check, so you can see the destination before you start.
-6. Delivers the guide locally: automatically rendered and archived with Python, or through a zero-install offline browser viewer when Python is unavailable.
+6. Tags each guide with a four-digit ISCED-F 2013 detailed-field code and fine-grained Wikidata subject IDs, so your guide library can later be sorted and filtered by discipline. The skill tells the agent to write only codes and IDs it has checked during research, and to leave a tag out rather than guess.
+7. Delivers the guide locally: automatically rendered and archived with Python, or through a zero-install offline browser viewer when Python is unavailable.
 
 Knowledge Compass is useful for prompts such as:
 
