@@ -12,13 +12,16 @@ Knowledge Compass is an Agent Skill for **Claude Code** and **Codex**. Give it a
 4. Builds a staged learning route with prerequisites and source dependencies.
 5. Ends the route with what you will roughly know and be able to do after finishing it, each item with a self-check, so you can see the destination before you start.
 6. Tags each guide with a four-digit ISCED-F 2013 detailed-field code and fine-grained Wikidata subject IDs, so your guide library can later be sorted and filtered by discipline. The skill tells the agent to write only codes and IDs it has checked during research, and to leave a tag out rather than guess.
-7. Delivers the guide locally: automatically rendered and archived with Python, or through a zero-install offline browser viewer when Python is unavailable.
+7. Deep-dives into one point of an existing guide: ask to dig deeper into, say, one concept from a guide you already have, and the skill researches that point as a child guide. It keeps the parent's field, avoids repeating the parent's sources, and records which guide and which point it came from. Child guides can be dug into again, as deep as you like. The parent guide's data is never changed.
+8. Delivers the guide locally: automatically rendered and archived with Python, or through a zero-install offline browser viewer when Python is unavailable.
 
 Knowledge Compass is useful for prompts such as:
 
 > I keep hearing “collective representation”, “social fact”, and “anomie”. What field is this, and where should I start learning it?
 
 > 这几个名词属于什么领域？请用权威资料给我一条从入门到进阶的学习路径。
+
+> 上次那份概率论指南里的中心极限定理，我想再深挖一下收敛速度。
 
 ## Requirements
 
@@ -83,7 +86,7 @@ When `python3` 3.8 or newer is available, generated guides are archived by defau
 ~/knowledge-compass/
 ```
 
-Each guide keeps its JSON source beside its rendered HTML. The same directory also contains `index.html`, which links all archived guides. Override the library location for one run with `--library`, or set `KNOWLEDGE_COMPASS_LIBRARY` for a persistent custom location:
+Each guide keeps its JSON source beside its rendered HTML. The same directory also contains `index.html`, which links all archived guides. Deep-dive child guides in the library link back to their parent, and rendering a child also refreshes the parent's page (never its JSON) so it lists the child under “延伸深挖”; the index marks both. Pages written outside the library show the parent's name without a link. Override the library location for one run with `--library`, or set `KNOWLEDGE_COMPASS_LIBRARY` for a persistent custom location:
 
 ```bash
 export KNOWLEDGE_COMPASS_LIBRARY="/path/to/your/library"

@@ -1,9 +1,9 @@
 ---
 name: knowledge-compass
-description: This skill should be used when the user has a handful of scattered, unfamiliar terms or jargon they ran into somewhere and wants to figure out what field they belong to, where the authoritative/trustworthy knowledge on that field lives, and how to start learning it — e.g. "我最近老听到 X、Y、Z 这几个词，不知道是什么领域", "these buzzwords keep coming up, what domain is this and how do I get into it", "reverse-engineer the field from these terms and give me a learning roadmap", "这些名词属于哪个领域？有哪些权威资料和学习路径". It reverse-infers the domain from the terms (confirming candidates with the user when ambiguous), researches verified authoritative sources, and produces a source-verified learning path as local JSON plus self-contained HTML or structured Markdown, with automatic archiving when Python 3.8+ is available. Trigger even when the user doesn't say "domain", "field", or "learning path" — any time they have orphan terminology and want to know the field plus where to learn it authoritatively.
+description: This skill should be used when the user has a handful of scattered, unfamiliar terms or jargon they ran into somewhere and wants to figure out what field they belong to, where the authoritative knowledge on that field lives, and how to start learning it — e.g. "我最近老听到 X、Y、Z 这几个词，不知道是什么领域", "these buzzwords keep coming up, what domain is this and how do I get into it", "这些名词属于哪个领域？有哪些权威资料和学习路径". It reverse-infers the domain from the terms (confirming candidates with the user when ambiguous), researches verified authoritative sources, and produces a source-verified learning path as local JSON plus self-contained HTML or structured Markdown, with automatic archiving when Python 3.8+ is available. Also use it to dig deeper into one point of an existing knowledge-compass guide ("想深挖这份指南里的 X"), producing a linked child guide. Trigger even when the user doesn't say "domain", "field", or "learning path" — any time they have orphan terminology and want to know the field plus where to learn it authoritatively.
 license: MIT
 metadata:
-  version: "0.7.0"
+  version: "0.8.0"
   author: "hidetodong"
   compatibility: "Claude Code; Codex; modern browser; Python 3.8+ optional"
 ---
@@ -34,6 +34,8 @@ metadata:
 ## Workflow
 
 整个流程刻意分两段：先用便宜的"解码"过一遍并**让用户确认**，再把昂贵的深度研究只花在确认过的领域上。
+
+如果用户是想对一份**已有指南**里的某个点再挖深，按下文「深挖模式」走；其余情况照 Phase 0–4。
 
 ### Phase 0 — Intake（收集碎片）
 收齐用户手里的每个术语，以及任何上下文（在哪听到的、旁边还有什么词）。一个词也能起步，但更多词能更好地三角定位——如果只给了一个含糊的词，先问问还有没有别的词或语境再开研究。但别过度阻塞，用户实在没有就继续。
@@ -100,11 +102,11 @@ metadata:
 
 脚本把 JSON 内联进 `assets/viewer_template.html`，写出一个自包含 `.html` 并尝试在本地浏览器打开；页面显示领域判断、来源卡片、依赖路线和可记忆进度。
 
-脚本同时把 `.json` 源、`.html` 页和重建的 `index.html` 放进同一个中央库。库位置由 `KNOWLEDGE_COMPASS_LIBRARY` 配置（也可 `--library DIR` 临时覆盖），未配置时回落到 `~/knowledge-compass/`。当传入 JSON 已在库内时，脚本在旁边幂等刷新同名 HTML，不复制第二份 JSON；库外 JSON 首次归档采用 `<date>-<领域slug>`，遇到重名加数字后缀。常用参数：`--out PATH`、`--library DIR`、`--no-archive`、`--no-open`。
+脚本同时把 `.json` 源、`.html` 页和重建的 `index.html` 放进同一个中央库。库位置由 `KNOWLEDGE_COMPASS_LIBRARY` 配置（也可 `--library DIR` 临时覆盖），未配置时回落到 `~/knowledge-compass/`。当传入 JSON 已在库内时，脚本在旁边幂等刷新同名 HTML，不复制第二份 JSON；库外 JSON 首次归档采用 `<date>-<标题slug>`（取 `topic`），遇到重名加数字后缀。常用参数：`--out PATH`、`--library DIR`、`--no-archive`、`--no-open`。
 
 #### B. 没有兼容 Python：零安装离线浏览器
 
-1. 从同一 JSON 生成结构化 Markdown，至少完整保留：领域与置信度、原始碎片、领域判断、速览、前置知识、学科分类（ISCED 代码与中文名、细分学科与维基数据编号）、四层资源及其链接/优先级/核实状态、分阶段计划、学成之后（大致水平、你会懂得、你能做到及各自的自检标志）和参考来源。写到 JSON 旁；不要把 Markdown 当成新的真源。
+1. 从同一 JSON 生成结构化 Markdown，至少完整保留：深挖来源（深挖自哪份指南的哪个点；子指南才有）、领域与置信度、原始碎片、领域判断、速览、前置知识、学科分类（ISCED 代码与中文名、细分学科与维基数据编号）、四层资源及其链接/优先级/核实状态、分阶段计划、学成之后（大致水平、你会懂得、你能做到及各自的自检标志）和参考来源。写到 JSON 旁；不要把 Markdown 当成新的真源。
 2. 把 `<skill-dir>/assets/viewer_template.html` 原样复制到 JSON 旁，命名为 `knowledge-compass-viewer.html`。如果该路径已是本 skill 先前复制的 viewer，可更新它；如果是无法确认归属的文件，改用安全的数字后缀，绝不覆盖用户内容。
 3. 用宿主已有的本地浏览器能力打开复制出的 viewer。不要为此安装浏览器，也不要把文件上传到网站。
 4. 只给用户这段小白指引，并带上真实文件名：**“无需安装任何东西：在打开的「离线罗盘校准台」里选择或拖入这份 JSON，检查通过后点「导出独立 HTML」。”** 页面会在本机读取并校验 JSON，生成可单独保存、离线打开和分享的 HTML。
@@ -115,12 +117,32 @@ metadata:
 
 返回 JSON 与结构化 Markdown 的绝对路径，并明确告诉用户：**研究和学习路线已经完成，只有交互网页、自动归档和中央索引暂时不可用。** 不要把这种交付降级描述成研究失败，也不要劝用户安装 Python。保留 `knowledge-compass-viewer.html`（若已成功复制），方便用户以后在有浏览器的设备上直接双击并导入 JSON。
 
+### 深挖模式（从已有指南的某个点往下挖）
+
+用户点名一份已有的知识罗盘指南（标题、文件名，或「刚才那份」），说想对其中某个点再挖深、做拓展学习时进入。产物是一份新的**子指南**，挂在原指南（父指南）的那个点下面；子指南还能再被深挖，层数不限。**父指南只读不改**：如果用户要的是修改原指南本身（补来源、插阶段），不走这里，如实说明这一版只支持深挖、不支持修订。
+
+1. **找到并读出父指南。** 用户给了文件路径就直接读；否则到中央库（`KNOWLEDGE_COMPASS_LIBRARY`，未设置时为 `~/knowledge-compass/`）里按 `topic`、`domain` 和文件名找对应的 `.json`。找不到、或有几份都对得上时，列出候选文件名先问用户，不要猜。完整读出它的领域、学科分类、各层资源、计划、学成之后和参考来源。只有 `.md` 的老格式指南也能当父指南（读 Markdown），只是页面上没法跳转。父指南不在库里时就在原处读，不要为了出跳转链接把它复制或渲染进库。
+2. **领域继承，不重判。** 跳过 Phase 1 的领域解码：`domain`、`confidence` 照抄父指南；`fragments` 写用户这次提到的深挖点原话；`domain_judgment` 用一句话说明这是从哪份指南的哪个点深挖出来的。
+3. **确认挖哪几个点。** Phase 1 的确认门改成确认深挖点：列出你理解的点，请用户确认或增删。**一个点一份子指南**，几个点就依次做几份，不要合成一份。
+4. **研究时避开父指南的来源。** Phase 2 只围绕这个点展开，反幻觉纪律照旧。父指南 `layers` 和 `references` 里已经列过的来源，不要再列为子指南的资源：同一本书、同一篇论文、同一个网页算同一来源，父指南列的是整个网站时，这个网站下的子页面也算；同一作者的其他作品不算。读这个点之前确实需要先读的，写进 `prerequisites`（如「先读完父指南里的《概率导论》第 10 章」）。子指南的分析确实依据了父指南的某个来源时，可以照常写进 `references` 作出处。
+5. **层数可以少于四层，但要有理由。** 照常追求四层。只有研究后确实找不到专门讲这个点的权威来源时，才可以省掉那一层，至少保留两层，并在 `overview` 里说一句为什么少。不要为了省事删层，也不要拿父指南的通用来源凑数。四类来源照常尽量覆盖。
+6. **学科分类。** 粗层 `isced` 通常沿用父指南的代码；细层 `subjects` 换成更贴近这个点的、更窄的概念，照 Phase 3 的方法核实；维基数据里没有更窄的条目时，用最贴近这个点的条目，仍找不到就照 Phase 3 不写，不要硬凑。
+7. **填 `parent`。** 在顶层写下深挖来源：
+
+   ```json
+   "parent": {"guide": "2026-10-09-概率论-极限定理", "topic": "概率论 · 极限定理",
+              "point": "中心极限定理的收敛速度：Berry–Esseen 界"}
+   ```
+
+   `guide` 是父指南在库里的文件名去掉 `.json`（不带路径和扩展名；父指南只有 `.md` 时去掉 `.md`；父指南不在库里时就是它自己的文件名去掉扩展名）。库里的文件名常带日期和整句标题，要逐字照抄，不要缩写。`topic` 照抄父指南的 `topic`，`point` 用一句话写深挖点。三项都必填，写法不对会直接渲染失败。
+8. **交付照常走 Phase 4。** 有 Python 时，脚本把子指南放进中央库，并自动重新生成父指南的网页，让它在「🔍 延伸深挖」里列出这份子指南；父指南的 JSON 不会被改。没有 Python、子指南页面不在中央库里（如 `--no-archive`），或者父指南不在库里时，子指南页面只显示父指南的名字、没有跳转链接，这是正常的。之后要改子指南，就改库里那份 JSON 再渲染它；拿库外的原文件重新渲染会在库里多归档一份，父指南也会多列一条。
+
 ## 内容规范（JSON 怎么填）
 
 完整字段见 `scripts/view_field_guide.py` 顶部 docstring。要点：
 
-- **顶层**：`topic`（标题，以领域+分支领衔，如「涂尔干学派：集体表象与社会事实」）、`domain`（领域眉题，如「社会学 · 古典社会学理论」，渲染成大标题上方金色眉题）、`fragments`（用户原始碎片，原样照列）、`domain_judgment`（一行——哪些词共现锁定该领域）、`confidence`（高/中/低）、`excluded`（可选，被排除 / 不吻合的词；全吻合则省略）、`disciplines`（学科归属数组，自由文本）、`classification`（可选，学科分类标签：`isced` 为 `{code, name}` 数组，`code` 是 ISCED-F 2013 四位细类代码字符串；`subjects` 为 `{qid, name}` 数组，`qid` 是维基数据编号如 `Q972877`。写法不对会直接渲染失败；代码和编号是否真实存在由研究时核实保证，渲染器不查）、`overview`（2–4 句速览）、`prerequisites`（领域级前置）。正文字段（`overview`/`domain_judgment`/`excluded`/`prerequisites`/`outcomes_summary` 及各 `reason`/`plan.detail`/`route`/`outcomes` 的 `title`、`detail`、`check`）里可写 `[n]` 角标引用 `references`。
-- **`layers`**：每层 `{emoji, title, subtitle, resources[]}`；4 层（入门 / 经典 / 进阶 / 实践），每层 2–4 个来源。
+- **顶层**：`topic`（标题，以领域+分支领衔，如「涂尔干学派：集体表象与社会事实」）、`domain`（领域眉题，如「社会学 · 古典社会学理论」，渲染成大标题上方金色眉题）、`fragments`（用户原始碎片，原样照列）、`domain_judgment`（一行——哪些词共现锁定该领域）、`confidence`（高/中/低）、`excluded`（可选，被排除 / 不吻合的词；全吻合则省略）、`disciplines`（学科归属数组，自由文本）、`classification`（可选，学科分类标签：`isced` 为 `{code, name}` 数组，`code` 是 ISCED-F 2013 四位细类代码字符串；`subjects` 为 `{qid, name}` 数组，`qid` 是维基数据编号如 `Q972877`。写法不对会直接渲染失败；代码和编号是否真实存在由研究时核实保证，渲染器不查）、`overview`（2–4 句速览）、`prerequisites`（领域级前置）、`parent`（可选，深挖来源 `{guide, topic, point}`，只有子指南才写，见「深挖模式」；页面上的跳转链接由脚本生成，不要手写 `_parent_href`、`_children`）。正文字段（`overview`/`domain_judgment`/`excluded`/`prerequisites`/`outcomes_summary` 及各 `reason`/`plan.detail`/`route`/`outcomes` 的 `title`、`detail`、`check`）里可写 `[n]` 角标引用 `references`。
+- **`layers`**：每层 `{emoji, title, subtitle, resources[]}`；4 层（入门 / 经典 / 进阶 / 实践），每层 2–4 个来源。深挖出来的子指南只在「深挖模式」第 5 条说的情况下才可以少于四层。
 - **每个 resource**：`name`（中英对照）、`meta`（作者，版本/年份）、`type`、`priority`（必读/推荐/可选）、`prereq`（背景知识，自由文本）、`reason`、`difficulty`、`audience`、`url`（仅 `http://` / `https://`）、`free`、`verified`（只有显式 `true` 才显示已核实）、`verify_note`；流程树相关：`id`（1–64 位小写字母、数字、`.`、`_`、`-` 组成的稳定键；不要用 `constructor` / `prototype` 等保留键）、`requires`（前置来源 id 数组，资源→资源依赖，与 `prereq` 不同）。
 - **`references`**：可溯出处数组 `{title, source, url, note}`，按序号对应正文 `[n]` 角标，渲染在页面最下方「参考来源」区；登记前同样须核实存在。
 - **`plan`**：分阶段数组 `{step, detail}`，可执行、有目标和完成标志；没有 plan 时才用 `route`（一段话替代）。

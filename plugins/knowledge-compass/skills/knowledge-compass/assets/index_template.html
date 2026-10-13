@@ -41,6 +41,8 @@
     border-radius:5px;padding:1px 9px;font-size:12px;font-weight:600}
   .meta{color:var(--muted);font-size:12.5px;margin-top:8px;display:flex;gap:14px;flex-wrap:wrap}
   .warnflag{color:#9a6a2e;font-weight:600}
+  .from{margin-top:4px;color:var(--muted);font-size:12.5px;overflow-wrap:anywhere;min-width:0}
+  .dives{color:var(--accent);font-weight:600}
   .empty{color:var(--muted);font-style:italic;margin-top:48px;text-align:center}
 </style>
 </head>
@@ -71,11 +73,17 @@ if(!DATA.length){
   const discs = Array.isArray(it.disciplines) && it.disciplines.length
     ? `<div class="disc">${it.disciplines.map(d=>`<span>${esc(d)}</span>`).join("")}</div>` : "";
   const unv = it.unverified>0 ? `<span class="warnflag">⚠ ${it.unverified} 未核实</span>` : "";
+  // 深挖关系：子指南标来源，被深挖过的父指南标延伸数量；箭头和图标读屏不念。
+  const from = it.parent && typeof it.parent.topic === "string"
+    ? `<div class="from"><span aria-hidden="true">↳ </span>深挖自《${esc(it.parent.topic)}》</div>` : "";
+  const dives = Number.isInteger(it.deep_dives) && it.deep_dives > 0
+    ? `<span class="dives"><span aria-hidden="true">🔍 </span>${it.deep_dives} 份延伸</span>` : "";
   a.innerHTML =
     kicker+
     `<div class="top"><div class="domain">${esc(title)}</div>${conf}</div>`+
+    from+
     discs+
-    `<div class="meta"><span>${esc(it.date || "")}</span><span>${it.sources||0} 来源</span>${unv}</div>`;
+    `<div class="meta"><span>${esc(it.date || "")}</span><span>${it.sources||0} 来源</span>${unv}${dives}</div>`;
   list.appendChild(a);
 });
 </script>

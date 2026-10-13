@@ -23,6 +23,12 @@ archived under <date>-<topic-slug> on first render; thereafter edit the in-libra
 it. --out always wins when given. --no-archive guarantees that neither output file is inside the
 configured library; when the input already lives there, provide --out with an external path.
 
+Deep dives: a guide whose "parent" names another library guide is a child guide. Pages inside the
+library get relative links to their direct parent and direct children; pages written elsewhere
+show the parent's name only, since a relative link would break and an absolute one would leak
+local paths. When a child lands in the library, only its parent's HTML is re-rendered (keeping
+that page's progress key) so the parent lists it; the parent's JSON is never written.
+
 Usage:
     python3 view_field_guide.py guide.json [--out PATH] [--library DIR]
                                 [--no-archive] [--no-open]
@@ -42,6 +48,15 @@ The JSON schema (all fields optional except topic + layers):
   "classification": {
     "isced": [{"code": "0541", "name": "数学"}],
     "subjects": [{"qid": "Q5862903", "name": "概率论"}]
+  },
+  # （可选）深挖来源：这份指南是从哪份父指南的哪个点深挖出来的。guide 是父指南在中央库里的
+  # 文件名（不带 .json），topic 照抄父指南标题，point 一句话写深挖点。父指南的 JSON 永远不改；
+  # 渲染进库时脚本会重新生成父指南的网页，让它列出这份延伸。页面上的跳转链接（_parent_href、
+  # _children）由脚本按库里现状生成，写进 JSON 也会被忽略。
+  "parent": {
+    "guide": "2026-10-09-概率论-极限定理",
+    "topic": "概率论 · 极限定理",
+    "point": "中心极限定理的收敛速度：Berry–Esseen 界"
   },
   "overview": "2-4 句领域速览",
   "prerequisites": "学这个领域整体需要的前置知识（如 微积分），显示为独立小卡片",
@@ -121,6 +136,15 @@ OUTCOME_KINDS = ("知识", "能力")
 # newline, while the browser's mirrored patterns accept neither. Always use fullmatch().
 ISCED_CODE_RE = re.compile(r"[0-9]{4}")
 WIKIDATA_QID_RE = re.compile(r"Q[1-9][0-9]*")
+# A parent guide is named by its library file stem. ASCII case variants are spelled out instead of
+# re.IGNORECASE, which would also fold "ſ" into "s" where the browser's mirrored pattern does not.
+GUIDE_EXTENSION_RE = re.compile(r"\.(?:[jJ][sS][oO][nN]|[hH][tT][mM][lL])\Z")
+# Deep-dive links are derived from the library at render time and never taken from input data.
+DERIVED_VIEW_KEYS = ("_parent_href", "_children")
+STORAGE_KEY_RE = re.compile(r"[0-9a-f]{24}|browser-[0-9a-f]{16}")
+VIEWER_DATA_RE = re.compile(
+    r'<script id="kc-guide-data" type="application/json">(.*?)</script>', re.DOTALL
+)
 # Python str.strip() and JavaScript trim() disagree on "whitespace" (\x1c-\x1f and \x85 vs \ufeff).
 # Blank checks use this explicit union instead; the viewer's BLANK_TEXT_RE mirrors it.
 BLANK_CHARS = (
@@ -132,6 +156,11 @@ BLANK_CHARS = (
 def is_blank_text(value):
     """True when a string holds only characters either runtime treats as whitespace."""
     return not value.strip(BLANK_CHARS)
+
+
+def has_control_character(value):
+    """Mirror of the viewer's hasUnsafeControl(): C0/C1 controls and lone surrogates."""
+    return any(unicodedata.category(char) in {"Cc", "Cs"} for char in value)
 
 
 def is_valid_web_hostname(value):
@@ -248,7 +277,7 @@ def validate_guide(data):
     topic = data.get("topic")
     if not isinstance(topic, str) or not topic.strip():
         errors.append("topic must be a non-empty string")
-    elif any(unicodedata.category(char) in {"Cc", "Cs"} for char in topic):
+    elif has_control_character(topic):
         errors.append("topic must not contain control characters")
 
     for key in (
@@ -417,6 +446,7 @@ def validate_guide(data):
             errors.append(f"{key} must be an array of strings")
 
     errors.extend(validate_classification(data))
+    errors.extend(validate_parent(data))
     return errors
 
 
@@ -452,6 +482,37 @@ def validate_classification(data):
             name = item.get("name")
             if not isinstance(name, str) or is_blank_text(name):
                 errors.append(f"{path}.name must be a non-empty string")
+    return errors
+
+
+def is_valid_guide_name(value):
+    """A library file stem: no path separators, controls, dot names or .json/.html suffix."""
+    return (
+        isinstance(value, str)
+        and not is_blank_text(value)
+        and "/" not in value
+        and "\\" not in value
+        and not has_control_character(value)
+        and value not in (".", "..")
+        and GUIDE_EXTENSION_RE.search(value) is None
+    )
+
+
+def validate_parent(data):
+    """Check only the shape of the optional deep-dive source; the parent is never looked up here."""
+    if "parent" not in data:
+        return []
+    parent = data["parent"]
+    if not isinstance(parent, dict):
+        return ["parent must be an object"]
+
+    errors = []
+    if not is_valid_guide_name(parent.get("guide")):
+        errors.append("parent.guide must be a library file name without path or extension")
+    for key in ("topic", "point"):
+        value = parent.get(key)
+        if not isinstance(value, str) or is_blank_text(value):
+            errors.append(f"parent.{key} must be a non-empty string")
     return errors
 
 
@@ -565,7 +626,15 @@ def index_classification(data):
     return projected
 
 
-def index_entry(data, html_name, mtime):
+def index_parent(data):
+    """Project a validated deep-dive source onto its three fields (no stray keys like __proto__)."""
+    parent = data.get("parent")
+    if not isinstance(parent, dict):
+        return None
+    return {key: parent[key] for key in ("guide", "topic", "point")}
+
+
+def index_entry(data, html_name, mtime, deep_dives=0):
     sources = [r for layer in data.get("layers", []) for r in layer.get("resources", [])]
     return {
         "topic": data.get("topic", "") or "领域指南",
@@ -574,6 +643,8 @@ def index_entry(data, html_name, mtime):
         "disciplines": data.get("disciplines", []) or [],
         # Kept for future subject filtering; build_index only admits validated guides.
         "classification": index_classification(data),
+        "parent": index_parent(data),
+        "deep_dives": deep_dives,
         # Encode every filename byte so even an unusual name beginning with
         # "javascript:" remains a relative file link in the generated index.
         "html": quote(html_name, safe=""),
@@ -584,20 +655,149 @@ def index_entry(data, html_name, mtime):
     }
 
 
-def build_index(library):
-    """Scan the library's *.json guides and (re)write index.html — the click-through entry page."""
-    entries = []
-    for jf in sorted(library.glob("*.json")):
+def scan_library(library):
+    """List the library's guides as (json_path, html_path, data), sorted by file name.
+
+    Only guides with a viewable page are listed: both files are regular (not symlinks) and the
+    JSON parses and validates. A hand-placed index.json (any case) is never a guide, because its
+    page would be the library index itself. The index and the deep-dive links share this one
+    definition.
+    """
+    guides = []
+    for jf in sorted(Path(library).glob("*.json")):
         html_file = jf.with_suffix(".html")
-        if jf.is_symlink() or html_file.is_symlink() or not html_file.is_file():
-            continue                      # only list guides that have a viewable page
+        if jf.stem.lower() == "index" or jf.is_symlink() or html_file.is_symlink() or not html_file.is_file():
+            continue
         try:
             data = json.loads(jf.read_text(encoding="utf-8"))
         except Exception:
             continue
         if validate_guide(data):
             continue
-        entries.append(index_entry(data, html_file.name, jf.stat().st_mtime))
+        guides.append((jf, html_file, data))
+    return guides
+
+
+def children_by_parent(guides):
+    """Group listed guides under the stem their parent field names, never under themselves."""
+    children = {}
+    for jf, html_file, data in guides:
+        parent = data.get("parent")
+        if isinstance(parent, dict) and parent["guide"] != jf.stem:
+            children.setdefault(parent["guide"], []).append((jf, html_file, data))
+    return children
+
+
+def find_parent(data, html_path, guides):
+    """Return the listed (json, html, data) of this guide's parent, or None when there is none.
+
+    Lookup is by exact file stem, so behaviour does not depend on filesystem case folding. A guide
+    naming itself has no parent page, and the library index is never listed (see scan_library).
+    """
+    parent = data.get("parent")
+    if not isinstance(parent, dict):
+        return None
+    guide = parent["guide"]
+    html_path = Path(html_path)
+    if guide == html_path.stem:
+        return None
+    for jf, html_file, parent_data in guides:
+        if jf.stem != guide:
+            continue
+        try:
+            if os.path.samefile(str(jf), str(html_path.with_suffix(".json"))):
+                return None
+        except OSError:
+            pass                          # this guide's own JSON is not written yet
+        return jf, html_file, parent_data
+    return None
+
+
+def library_links(data, html_path, guides):
+    """Derive a library page's links to its direct parent and direct children.
+
+    Only call this for pages written into the library, where sibling file names are valid relative
+    links. Only direct relations are shown, so a hand-made cycle cannot make this recurse.
+    """
+    links = {}
+    parent = find_parent(data, html_path, guides)
+    if parent is not None:
+        links["_parent_href"] = quote(parent[1].name, safe="")
+    children = children_by_parent(guides).get(Path(html_path).stem, [])
+    if children:
+        links["_children"] = [
+            {"topic": child["topic"], "point": child["parent"]["point"], "href": quote(html_file.name, safe="")}
+            for _jf, html_file, child in children
+        ]
+    return links
+
+
+def view_payload(data, storage_key, links=None):
+    """The data embedded in a page: the guide minus any derived keys, plus this page's own."""
+    view_data = {key: value for key, value in data.items() if key not in DERIVED_VIEW_KEYS}
+    view_data["_storage_key"] = storage_key
+    view_data.update(links or {})
+    return view_data
+
+
+def path_storage_key(html_path):
+    """Progress key for a Python-rendered page: a hash of where the page lives."""
+    return hashlib.sha256(str(Path(html_path).resolve()).encode("utf-8")).hexdigest()[:24]
+
+
+def embedded_storage_key(html_path):
+    """Read the progress key a rendered page already carries, or None if it has no usable one.
+
+    A page that cannot be read at all raises OSError, so callers never overwrite a page whose
+    key they could not see (a permission problem, or a cloud placeholder not yet downloaded).
+    """
+    try:
+        match = VIEWER_DATA_RE.search(Path(html_path).read_text(encoding="utf-8"))
+        key = json.loads(match.group(1)).get("_storage_key") if match else None
+    except (UnicodeError, ValueError, AttributeError):
+        return None
+    return key if isinstance(key, str) and STORAGE_KEY_RE.fullmatch(key) else None
+
+
+def write_viewer(html_path, data, storage_key, links=None):
+    payload = view_payload(data, storage_key, links)
+    write_text_atomic(html_path, inline(VIEWER_TEMPLATE, VIEWER_PLACEHOLDER, payload))
+
+
+def refresh_parent_page(data, html_path, library):
+    """Re-render the direct parent's page so its deep-dive list includes this library guide.
+
+    Writes the parent's HTML only: its JSON keeps its bytes and modification time, so the index
+    date and order stay put, and the page keeps the progress key it already carries. Returns
+    (message, is_warning); a failure here never fails the child guide, which is already written.
+    """
+    guide = data["parent"]["guide"]
+    try:
+        guides = scan_library(library)
+        parent = find_parent(data, html_path, guides)
+        if parent is None:
+            if guide == Path(html_path).stem:
+                return "   parent.guide 指向这份指南自己，已忽略。", False
+            return f"   父指南「{guide}」不在领域库里（或没有网页），子指南页面只显示它的名字。", False
+        _parent_json, parent_html, parent_data = parent
+        storage_key = embedded_storage_key(parent_html) or path_storage_key(parent_html)
+        write_viewer(parent_html, parent_data, storage_key, library_links(parent_data, parent_html, guides))
+    except (OSError, RuntimeError, ValueError) as error:
+        return (
+            f"   警告：父指南页面没能更新（{error}）。子指南已生成，修好后重新渲染子指南即可。",
+            True,
+        )
+    return f"   已更新父指南页面：{parent_html.name}", False
+
+
+def build_index(library):
+    """Scan the library's *.json guides and (re)write index.html — the click-through entry page."""
+    guides = scan_library(library)
+    children = children_by_parent(guides)
+    entries = [
+        index_entry(data, html_file.name, jf.stat().st_mtime, len(children.get(jf.stem, [])))
+        for jf, html_file, data in guides
+    ]
     entries.sort(key=lambda e: e["_mtime"], reverse=True)   # newest first
     for e in entries:
         e.pop("_mtime", None)
@@ -736,11 +936,18 @@ def main():
         if not args.no_archive:
             library.mkdir(parents=True, exist_ok=True)
             validate_destination(library / "index.html")
-        view_data = dict(data)
-        view_data["_storage_key"] = hashlib.sha256(
-            str(out.resolve()).encode("utf-8")
-        ).hexdigest()[:24]
-        write_text_atomic(out, inline(VIEWER_TEMPLATE, VIEWER_PLACEHOLDER, view_data))
+        out_in_library = not args.no_archive and out.resolve().parent == library.resolve()
+        storage_key = path_storage_key(out)
+        # Re-rendering a library guide in place (e.g. a parent, to tidy its deep-dive list) keeps
+        # the key its page already carries, so a key taken from an --out page or an old library
+        # location survives and ticked steps stay ticked. New pages still get a path key.
+        if in_library and not args.out and out.is_file() and not out.is_symlink():
+            try:
+                storage_key = embedded_storage_key(out) or storage_key
+            except OSError:
+                pass  # the user asked for this page; an unreadable one is simply rewritten
+        links = library_links(data, out, scan_library(library)) if out_in_library else None
+        write_viewer(out, data, storage_key, links)
         # Keep the JSON (source of truth) beside the HTML. If it is already the input,
         # leave the user's bytes untouched rather than rewriting through a possible symlink.
         if data_path is None or json_path.resolve() != data_path.resolve():
@@ -752,18 +959,26 @@ def main():
     print(f"✅ 领域指南网页已生成：{abs_out}")
 
     if not args.no_archive:
+        parent_note = None
         try:
-            # If the output lives outside the library, drop a collision-safe copy in.
-            if out.resolve().parent != library.resolve():
-                archive_html = next_available_pair(library / out.name)
-                archive_json = archive_html.with_suffix(".json")
-                copy_file_atomic(out, archive_html)
-                copy_file_atomic(json_path, archive_json)
+            library_html = out
+            # If the output lives outside the library, drop a collision-safe copy in. The copy is
+            # rendered for its library location so it carries library links, but keeps the
+            # external page's progress key so both copies still share progress.
+            if not out_in_library:
+                library_html = next_available_pair(library / out.name)
+                write_viewer(library_html, data, storage_key, library_links(data, library_html, scan_library(library)))
+                copy_file_atomic(json_path, library_html.with_suffix(".json"))
+            if "parent" in data:
+                parent_note = refresh_parent_page(data, library_html, library)
             index_path, n = build_index(library)
         except (OSError, RuntimeError, ValueError) as error:
             print(f"error: could not archive field guide: {error}", file=sys.stderr)
             return 2
         print(f"   已归档到领域库：{library}")
+        if parent_note is not None:
+            message, is_warning = parent_note
+            print(message, file=sys.stderr if is_warning else sys.stdout)
         print(f"   领域库索引（{n} 份 · 打开它点卡片回看）：{index_path}")
 
     if args.no_open:
