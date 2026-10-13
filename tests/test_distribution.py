@@ -1,5 +1,6 @@
 """Tests for the dual-host public distribution."""
 
+import importlib.util
 import json
 import re
 import shutil
@@ -51,10 +52,10 @@ class DistributionTests(unittest.TestCase):
         claude_plugin = load_json("plugins/knowledge-compass/.claude-plugin/plugin.json")
         codex_plugin = load_json("plugins/knowledge-compass/.codex-plugin/plugin.json")
 
-        self.assertEqual(claude_marketplace["metadata"]["version"], "0.7.0")
-        self.assertEqual(claude_marketplace["plugins"][0]["version"], "0.7.0")
-        self.assertEqual(claude_plugin["version"], "0.7.0")
-        self.assertEqual(codex_plugin["version"], "0.7.0")
+        self.assertEqual(claude_marketplace["metadata"]["version"], "0.8.0")
+        self.assertEqual(claude_marketplace["plugins"][0]["version"], "0.8.0")
+        self.assertEqual(claude_plugin["version"], "0.8.0")
+        self.assertEqual(codex_plugin["version"], "0.8.0")
 
     def test_there_is_one_canonical_skill(self):
         skill_files = sorted((REPO_ROOT / "plugins").rglob("SKILL.md"))
@@ -149,6 +150,41 @@ class DistributionTests(unittest.TestCase):
         for case in evals["evals"]:
             with self.subTest(eval_id=case["id"]):
                 self.assertTrue(any("classification" in item for item in case["assertions"]))
+
+    def test_deep_dive_contract_is_explicit(self):
+        skill = (SKILL_ROOT / "SKILL.md").read_text(encoding="utf-8")
+        readme = (REPO_ROOT / "README.md").read_text(encoding="utf-8")
+        evals = json.loads((SKILL_ROOT / "evals" / "evals.json").read_text(encoding="utf-8"))
+        description = re.search(r"^description:\s*(.+)$", skill, re.MULTILINE).group(1)
+        self.assertIn("dig deeper into one point of an existing knowledge-compass guide", description)
+        for value in (
+            "按下文「深挖模式」走",
+            "### 深挖模式（从已有指南的某个点往下挖）",
+            "**父指南只读不改**",
+            "**一个点一份子指南**",
+            "不要再列为子指南的资源",
+            "至少保留两层，并在 `overview` 里说一句为什么少",
+            '"parent": {"guide": "2026-10-09-概率论-极限定理"',
+            "不要手写 `_parent_href`、`_children`",
+            "深挖来源（深挖自哪份指南的哪个点；子指南才有）",
+        ):
+            with self.subTest(value=value):
+                self.assertIn(value, skill)
+        self.assertIn("Deep-dives into one point of an existing guide", readme)
+        self.assertIn("延伸深挖", readme)
+
+        case = next(case for case in evals["evals"] if case["id"] == 4)
+        self.assertEqual(case["files"], ["evals/files/options-greeks-parent.json"])
+        self.assertTrue(any("parent" in item and "options-greeks-parent" in item for item in case["assertions"]))
+        fixture = json.loads((SKILL_ROOT / case["files"][0]).read_text(encoding="utf-8"))
+        self.assertNotIn("parent", fixture)
+        self.assertIn("gamma 对冲", json.dumps(fixture["plan"], ensure_ascii=False))
+        spec = importlib.util.spec_from_file_location(
+            "view_field_guide", SKILL_ROOT / "scripts" / "view_field_guide.py"
+        )
+        renderer = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(renderer)
+        self.assertEqual(renderer.validate_guide(fixture), [])
 
     def test_offline_viewer_is_packaged_self_contained_and_accessible(self):
         viewer = VIEWER.read_text(encoding="utf-8")

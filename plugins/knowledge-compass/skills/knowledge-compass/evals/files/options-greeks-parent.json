@@ -1,0 +1,249 @@
+{
+  "topic": "期权：希腊字母与波动率",
+  "domain": "金融 · 衍生品与期权定价",
+  "fragments": [
+    "gamma",
+    "theta",
+    "隐含波动率",
+    "covered call",
+    "the greeks"
+  ],
+  "domain_judgment": "gamma、theta、隐含波动率和「希腊字母」只在期权定价与风险管理里一起出现，covered call（备兑开仓）是最常见的期权策略之一，几个词共同锁定期权这一衍生品分支[1]。",
+  "confidence": "高",
+  "disciplines": [
+    "金融学 · 衍生品",
+    "金融数学"
+  ],
+  "classification": {
+    "isced": [
+      {
+        "code": "0412",
+        "name": "金融、银行和保险"
+      }
+    ],
+    "subjects": [
+      {
+        "qid": "Q187860",
+        "name": "期权"
+      },
+      {
+        "qid": "Q1321169",
+        "name": "希腊字母（期权风险参数）"
+      },
+      {
+        "qid": "Q1660345",
+        "name": "隐含波动率"
+      }
+    ]
+  },
+  "overview": "期权是在约定日期以约定价格买入或卖出标的资产的权利。希腊字母（delta、gamma、theta、vega 等）衡量期权价格对标的价格、时间和波动率的敏感度，是期权交易与风险管理的通用语言[1]。隐含波动率是从市场价格反推出的波动率，常被用来比较期权的贵贱。",
+  "prerequisites": "微积分（导数与偏导数）、概率论基础（正态分布、期望），以及股票和利率的基本概念。",
+  "layers": [
+    {
+      "emoji": "🌱",
+      "title": "入门",
+      "subtitle": "建立直觉 / 打基础",
+      "resources": [
+        {
+          "name": "期权行业委员会期权教育（OIC Options Education）",
+          "meta": "The Options Industry Council（OCC 下属教育机构）",
+          "id": "oic-education",
+          "type": "官方机构 / 教程",
+          "priority": "必读",
+          "prereq": "无",
+          "reason": "美国期权清算公司下属的非商业教育机构，免费课程从期权基础讲到希腊字母和常见策略，用词规范。",
+          "difficulty": "入门友好",
+          "audience": "第一次接触期权的读者",
+          "url": "https://www.optionseducation.org/",
+          "free": true,
+          "verified": true
+        },
+        {
+          "name": "芝加哥期权交易所期权学院（Cboe Options Institute）",
+          "meta": "Cboe Global Markets",
+          "type": "交易所教育",
+          "priority": "推荐",
+          "prereq": "无",
+          "reason": "期权交易所自办的教育平台，按主题讲期权定价、波动率与策略，贴近真实市场。",
+          "difficulty": "入门友好",
+          "audience": "想把概念对上真实报价表的读者",
+          "url": "https://www.cboe.com/optionsinstitute/",
+          "free": true,
+          "verified": true
+        }
+      ]
+    },
+    {
+      "emoji": "📘",
+      "title": "经典",
+      "subtitle": "领域公认的核心读物",
+      "resources": [
+        {
+          "name": "《期权、期货及其他衍生产品》（Options, Futures, and Other Derivatives）",
+          "meta": "John C. Hull · Pearson，第 11 版，2021",
+          "id": "hull-ofod",
+          "requires": [
+            "oic-education"
+          ],
+          "type": "教材",
+          "priority": "必读",
+          "prereq": "微积分、概率论基础",
+          "reason": "衍生品领域引用最广的教材，「希腊字母」一章系统讲 delta、gamma、theta、vega 及对冲。",
+          "difficulty": "中等",
+          "audience": "想系统学衍生品定价与风险管理的读者",
+          "url": "https://www.pearson.com/en-us/subject-catalog/p/options-futures-and-other-derivatives/P200000005938",
+          "free": false,
+          "verified": true
+        },
+        {
+          "name": "《期权波动率与定价》（Option Volatility and Pricing，第 2 版）",
+          "meta": "Sheldon Natenberg · McGraw-Hill Education，2014 · ISBN 9780071818773",
+          "id": "natenberg",
+          "requires": [
+            "oic-education"
+          ],
+          "type": "教材",
+          "priority": "推荐",
+          "prereq": "期权基本概念",
+          "reason": "交易员视角的经典读物，用大量例子讲波动率、希腊字母和价差策略。",
+          "difficulty": "中等",
+          "audience": "关心实际交易的读者",
+          "url": "https://openlibrary.org/isbn/9780071818773",
+          "free": false,
+          "verified": true
+        }
+      ]
+    },
+    {
+      "emoji": "🚀",
+      "title": "进阶",
+      "subtitle": "深入 / 研究导向",
+      "resources": [
+        {
+          "name": "《期权与公司负债的定价》（The Pricing of Options and Corporate Liabilities）",
+          "meta": "Fischer Black & Myron Scholes · Journal of Political Economy 81(3)，1973 · DOI 10.1086/260062",
+          "id": "black-scholes",
+          "requires": [
+            "hull-ofod"
+          ],
+          "type": "奠基论文",
+          "priority": "必读",
+          "prereq": "随机过程初步",
+          "reason": "提出 Black–Scholes 期权定价公式的奠基论文，希腊字母就是这个公式的偏导数[2]。",
+          "difficulty": "进阶",
+          "audience": "想读原始文献的读者",
+          "url": "https://doi.org/10.1086/260062",
+          "free": false,
+          "verified": true
+        },
+        {
+          "name": "《理性期权定价理论》（Theory of Rational Option Pricing）",
+          "meta": "Robert C. Merton · Bell Journal of Economics and Management Science 4(1)，1973 · DOI 10.2307/3003143",
+          "id": "merton",
+          "requires": [
+            "black-scholes"
+          ],
+          "type": "奠基论文",
+          "priority": "推荐",
+          "prereq": "随机过程初步",
+          "reason": "把 Black–Scholes 框架推广并严格化，是连续时间金融的起点之一。",
+          "difficulty": "进阶",
+          "audience": "想读原始文献的读者",
+          "url": "https://doi.org/10.2307/3003143",
+          "free": false,
+          "verified": true
+        }
+      ]
+    },
+    {
+      "emoji": "🛠",
+      "title": "实践 / 课程",
+      "subtitle": "公开课、动手工具",
+      "resources": [
+        {
+          "name": "MIT 公开课：金融中的数学专题（18.S096 Topics in Mathematics with Applications in Finance）",
+          "meta": "MIT OpenCourseWare · 2013 秋",
+          "type": "大学公开课",
+          "priority": "推荐",
+          "prereq": "线性代数、概率论",
+          "reason": "MIT 数学系与业界讲者合开的课程，覆盖随机过程、Black–Scholes 与期权定价，视频和讲义免费。",
+          "difficulty": "进阶",
+          "audience": "数学基础较好、想看推导的读者",
+          "url": "https://ocw.mit.edu/courses/18-s096-topics-in-mathematics-with-applications-in-finance-fall-2013/",
+          "free": true,
+          "verified": true
+        },
+        {
+          "name": "Cboe 期权计算器（Options Calculator）",
+          "meta": "Cboe Options Institute · 在线工具",
+          "id": "cboe-calculator",
+          "requires": [
+            "hull-ofod"
+          ],
+          "type": "在线工具",
+          "priority": "可选",
+          "prereq": "期权基本概念",
+          "reason": "输入标的价格、行权价、到期日和波动率，即可看到期权理论价格与各个希腊字母的数值，适合拿书上的结论动手验证。",
+          "difficulty": "中等",
+          "audience": "想动手看参数变化如何影响希腊字母的读者",
+          "url": "https://www.cboe.com/optionsinstitute/tools/options-calculator",
+          "free": true,
+          "verified": true
+        }
+      ]
+    }
+  ],
+  "plan": [
+    {
+      "step": "阶段 1 · 建立直觉（约 2 周）",
+      "detail": "读完 OIC 的期权基础与希腊字母课程，能说清看涨、看跌期权和备兑开仓的盈亏；标志：能画出备兑开仓到期时的盈亏图。"
+    },
+    {
+      "step": "阶段 2 · 系统学定价与希腊字母（约 4–6 周）",
+      "detail": "读 Hull 教材的期权定价与希腊字母章节，弄懂 delta 对冲、gamma 对冲以及 gamma 与 theta 之间的此消彼长，并用 Cboe 期权计算器验证；标志：能解释为什么做了 delta 对冲的仓位还要再做 gamma 对冲。"
+    },
+    {
+      "step": "阶段 3 · 波动率与原始文献（约 4 周）",
+      "detail": "读 Natenberg 的波动率章节，再读 Black–Scholes 原文，理解隐含波动率从哪来；标志：能用期权报价反推隐含波动率并解释它的含义。"
+    }
+  ],
+  "outcomes_summary": "学完后能读懂期权报价表和常见策略的风险，离独立做专业的波动率交易还差大量实盘经验和更深的数学。",
+  "outcomes": [
+    {
+      "kind": "知识",
+      "title": "能解释 delta、gamma、theta、vega 各自衡量什么，以及它们之间的关系",
+      "detail": "来自阶段 2 的 Hull 教材",
+      "check": "不看书，给朋友讲清楚为什么临近到期时平值期权的 gamma 会变大"
+    },
+    {
+      "kind": "知识",
+      "title": "明白隐含波动率是怎么从市场价格反推出来的",
+      "detail": "来自阶段 3",
+      "check": "能说出隐含波动率和历史波动率的区别"
+    },
+    {
+      "kind": "能力",
+      "title": "能读懂一张期权报价表，算出一笔备兑开仓的盈亏平衡点",
+      "detail": "来自阶段 1、2",
+      "check": "随手找一张真实报价表，五分钟内算对"
+    },
+    {
+      "kind": "能力",
+      "title": "能判断一个期权组合大致暴露在哪些希腊字母风险上",
+      "detail": "来自阶段 2",
+      "check": "给定一个价差组合，说出它的 delta、gamma 符号"
+    }
+  ],
+  "references": [
+    {
+      "title": "Options Education（期权教育）",
+      "source": "The Options Industry Council",
+      "url": "https://www.optionseducation.org/"
+    },
+    {
+      "title": "The Pricing of Options and Corporate Liabilities",
+      "source": "Fischer Black & Myron Scholes · Journal of Political Economy · 1973",
+      "url": "https://doi.org/10.1086/260062"
+    }
+  ]
+}

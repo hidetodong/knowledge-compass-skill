@@ -54,6 +54,16 @@
   .class-row a.disc::after{content:" ↗";content:" ↗" / "";opacity:.7}
   .class-row a.disc:hover{text-decoration:underline;text-underline-offset:3px}
   .class-row a.disc:focus-visible{outline:3px solid var(--signal-coral);outline-offset:3px}
+  /* 深挖来源：hero 顶部面包屑。链接只在中央库里由渲染脚本生成 */
+  .parent-line{display:flex;flex-wrap:wrap;align-items:baseline;gap:2px 6px;margin:0 0 12px;
+    font-size:13px;color:var(--hero-ink);min-width:0;overflow-wrap:anywhere}
+  .parent-line .arrow{color:var(--gold)}
+  .parent-line .from{opacity:.8}
+  .parent-line .parent-name{font-weight:600;color:#f0e7d4;min-width:0}
+  .parent-line a.parent-name{text-decoration:none;color:#e6c77e}
+  .parent-line a.parent-name:hover{text-decoration:underline;text-underline-offset:3px}
+  .parent-line a.parent-name:focus-visible{outline:3px solid var(--signal-coral);outline-offset:3px;border-radius:2px}
+  .parent-line .point{opacity:.8;min-width:0}
   .legend{display:flex;flex-wrap:wrap;gap:14px;margin:16px 2px 0;font-size:12.5px;color:var(--muted)}
   .legend span{display:inline-flex;align-items:center;gap:5px}
   .dot{width:10px;height:10px;border-radius:3px;display:inline-block}
@@ -182,6 +192,18 @@
   .refs .ref-link{margin-left:8px;color:var(--accent);text-decoration:none;font-weight:600;font-size:12.5px}
   .refs .ref-link:hover{text-decoration:underline}
   .refs .ref-note{color:var(--muted)}
+  /* 延伸深挖：库里直接挂在这份指南下面的子指南 */
+  .deep-dives{background:var(--card);border:1px solid var(--line);border-radius:12px;
+    padding:18px 20px;margin-top:30px;overflow-wrap:anywhere}
+  .deep-dives h2{font-family:var(--serif);margin:0 0 4px;font-size:16px;letter-spacing:.02em}
+  .deep-dives .deep-dives-hint{margin:0 0 12px;font-size:12px;color:var(--muted)}
+  .deep-dives ul{list-style:none;margin:0;padding:0}
+  .deep-dives li{margin:0 0 10px;padding-left:12px;border-left:3px solid var(--gold);min-width:0}
+  .deep-dives li:last-child{margin-bottom:0}
+  .deep-dives a{color:var(--accent);font-weight:600;font-size:14.5px;text-decoration:none}
+  .deep-dives a:hover{text-decoration:underline;text-underline-offset:3px}
+  .deep-dives a:focus-visible{outline:3px solid var(--signal-coral);outline-offset:3px;border-radius:2px}
+  .deep-dives .point{display:block;font-size:13px;color:var(--muted)}
   footer{margin-top:34px;text-align:center;color:var(--muted);font-size:12px}
   footer code{background:#ece8dd;padding:1px 6px;border-radius:5px}
   .empty{color:var(--muted);font-size:13px;font-style:italic}
@@ -306,6 +328,12 @@ const OUTCOME_KINDS = OUTCOME_GROUPS.map(group => group.kind);
 // 学科分类标签只校验写法，与 view_field_guide.py 的 ISCED_CODE_RE / WIKIDATA_QID_RE 一致（仅 ASCII 数字）。
 const ISCED_CODE_RE = /^[0-9]{4}$/;
 const WIKIDATA_QID_RE = /^Q[1-9][0-9]*$/;
+// 深挖来源的父指南文件名不能带扩展名，与 view_field_guide.py 的 GUIDE_EXTENSION_RE 一致（显式写大小写，不用 i 标志）。
+const GUIDE_EXTENSION_RE = /\.(?:[jJ][sS][oO][nN]|[hH][tT][mM][lL])$/;
+// 页面上的跳转信息只能由渲染脚本按中央库现状生成；导入的数据自带的一律丢掉。
+const DERIVED_VIEW_KEYS = ["_parent_href","_children"];
+// 只接受 quote(文件名, safe="") 编出来的库内相对 .html 文件名，杜绝 javascript: 和外站地址。
+const LIBRARY_HREF_RE = /^(?:[A-Za-z0-9_.~-]|%[0-9A-F]{2})+\.html$/;
 // 空白判定用显式字符表，与 view_field_guide.py 的 BLANK_CHARS 一致（两端原生 trim/strip 的空白集合不同）。
 const BLANK_TEXT_RE = /^[\t\n\v\f\r\x1c-\x1f \x85\xa0\u1680\u2000-\u200a\u2028\u2029\u202f\u205f\u3000\ufeff]*$/;
 
@@ -591,7 +619,7 @@ function validateGuideInBrowser(data){
     }
   });
 
-  return errors.concat(validateClassificationInBrowser(data));
+  return errors.concat(validateClassificationInBrowser(data), validateParentInBrowser(data));
 }
 
 function validateClassificationInBrowser(data){
@@ -629,6 +657,37 @@ function validateClassificationInBrowser(data){
     });
   });
   return errors;
+}
+
+function isValidGuideName(value){
+  return typeof value === "string" && !BLANK_TEXT_RE.test(value) && !value.includes("/") &&
+    !value.includes("\\") && !hasUnsafeControl(value) && value !== "." && value !== ".." &&
+    !GUIDE_EXTENSION_RE.test(value);
+}
+
+// 深挖来源只校验写法，与 view_field_guide.py 的 validate_parent 一致；父指南在不在库里不查。
+function validateParentInBrowser(data){
+  if(!Object.prototype.hasOwnProperty.call(data,"parent")) return [];
+  const parent = data.parent;
+  if(!isRecord(parent)) return ["parent must be an object"];
+
+  const own = key => Object.prototype.hasOwnProperty.call(parent, key) ? parent[key] : undefined;
+  const errors = [];
+  if(!isValidGuideName(own("guide"))){
+    errors.push("parent.guide must be a library file name without path or extension");
+  }
+  ["topic","point"].forEach(key => {
+    const value = own(key);
+    if(typeof value !== "string" || BLANK_TEXT_RE.test(value)){
+      errors.push("parent." + key + " must be a non-empty string");
+    }
+  });
+  return errors;
+}
+
+function stripDerivedViewFields(data){
+  DERIVED_VIEW_KEYS.forEach(key => { delete data[key]; });
+  return data;
 }
 
 function canonicalJson(value){
@@ -768,6 +827,7 @@ async function importGuideFile(file){
       const more = errors.length > 8 ? "\n另有 " + (errors.length - 8) + " 个问题。" : "";
       throw new Error("这个 JSON 还不能生成指南：\n" + visible + more);
     }
+    stripDerivedViewFields(data);
     data._storage_key = browserStorageKey(data);
     CURRENT_DATA = data;
     CURRENT_FILE_NAME = file.name || "guide.json";
@@ -1199,6 +1259,65 @@ function renderClassification(classification){
   return row.childNodes.length > 1 ? row : null;
 }
 
+function ownValue(record, key){
+  return isRecord(record) && Object.prototype.hasOwnProperty.call(record, key) ? record[key] : undefined;
+}
+
+function ownText(record, key){
+  const value = ownValue(record, key);
+  return typeof value === "string" && !BLANK_TEXT_RE.test(value) ? value : null;
+}
+
+function libraryHref(value){
+  return typeof value === "string" && LIBRARY_HREF_RE.test(value) ? value : null;
+}
+
+// 深挖来源：hero 顶部「↖ 深挖自《父指南》· 深挖点」；只有渲染脚本在库里给出的合格链接才可点。
+function renderParentLine(data){
+  const parent = ownValue(data, "parent");
+  const topic = ownText(parent, "topic"), point = ownText(parent, "point");
+  if(!topic || !point) return null;
+  const line = el("nav","parent-line");
+  line.setAttribute("aria-label","深挖来源");
+  const arrow = el("span","arrow","↖");
+  arrow.setAttribute("aria-hidden","true");
+  line.appendChild(arrow);
+  line.appendChild(el("span","from","深挖自"));
+  const href = libraryHref(ownValue(data, "_parent_href"));
+  const name = el(href ? "a" : "span","parent-name","《" + topic + "》");
+  if(href) name.href = href;
+  line.appendChild(name);
+  line.appendChild(el("span","point","· " + point));
+  return line;
+}
+
+// 延伸深挖：渲染脚本在库里找到的直接子指南；不合格的项跳过，一项都没有就整块不出现。
+function renderDeepDives(data){
+  const children = ownValue(data, "_children");
+  if(!Array.isArray(children)) return null;
+  const list = el("ul");
+  children.forEach(child => {
+    const topic = ownText(child, "topic"), href = libraryHref(ownValue(child, "href"));
+    if(!topic || !href) return;
+    const item = el("li");
+    const link = el("a", null, topic);
+    link.href = href;
+    item.appendChild(link);
+    const point = ownText(child, "point");
+    if(point) item.appendChild(el("span","point", point));
+    list.appendChild(item);
+  });
+  if(!list.childNodes.length) return null;
+  const section = el("section","deep-dives");
+  section.setAttribute("aria-labelledby","deep-dives-title");
+  const title = el("h2", null, "🔍 延伸深挖");
+  title.id = "deep-dives-title";
+  section.appendChild(title);
+  section.appendChild(el("p","deep-dives-hint","从这份指南里挑出来单独深挖的点，每个点一份子指南。"));
+  section.appendChild(list);
+  return section;
+}
+
 function infoCard(cls, title, text){
   const c = el("div", "info" + (cls ? (" " + cls) : ""));
   c.appendChild(el("h2", null, title));
@@ -1213,6 +1332,8 @@ function render(data){
   REFS = Array.isArray(data.references) ? data.references : [];
 
   const hero = el("header","hero");
+  const parentLine = renderParentLine(data);
+  if(parentLine) hero.appendChild(parentLine);
   if(data.domain) hero.appendChild(el("div","kicker", data.domain));   // 领域眉题：直接点明反推出的领域+分支
   hero.appendChild(el("h1", null, data.topic || "领域指南"));
   if(Array.isArray(data.fragments) && data.fragments.length){
@@ -1290,6 +1411,9 @@ function render(data){
 
   const outcomesSection = renderOutcomes(data.outcomes_summary, data.outcomes);
   if(outcomesSection) app.appendChild(outcomesSection);
+
+  const deepDives = renderDeepDives(data);
+  if(deepDives) app.appendChild(deepDives);
 
   if(REFS.length) app.appendChild(renderReferences(REFS));
 

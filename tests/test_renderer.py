@@ -1,4 +1,5 @@
 import importlib.util
+import io
 import json
 import os
 import re
@@ -6,15 +7,20 @@ import shutil
 import subprocess
 import sys
 import tempfile
+import time
 import unittest
-from datetime import date
+from contextlib import redirect_stderr, redirect_stdout
+from datetime import date, datetime
 from pathlib import Path
+from unittest import mock
+from urllib.parse import quote
 
 
 ROOT = Path(__file__).resolve().parents[1]
 SKILL = ROOT / "plugins" / "knowledge-compass" / "skills" / "knowledge-compass"
 RENDERER = SKILL / "scripts" / "view_field_guide.py"
 VIEWER = SKILL / "assets" / "viewer_template.html"
+INDEX_TEMPLATE = SKILL / "assets" / "index_template.html"
 
 URL_PARITY_CASES = (
     ("https://example.com/path?q=1#section", True),
@@ -106,7 +112,7 @@ def valid_guide():
     }
 
 
-def run_renderer(input_path, library, *extra):
+def run_renderer(input_path, library, *extra, timeout=None):
     env = os.environ.copy()
     env["KNOWLEDGE_COMPASS_LIBRARY"] = str(library)
     return subprocess.run(
@@ -116,6 +122,7 @@ def run_renderer(input_path, library, *extra):
         text=True,
         capture_output=True,
         check=False,
+        timeout=timeout,
     )
 
 
@@ -1098,6 +1105,673 @@ process.stdout.write(JSON.stringify({
 
         self.assertEqual(count, 0)
         self.assertEqual(json.loads(re.search(r"const DATA = (.*?);\n", index).group(1)), [])
+
+
+def load_renderer():
+    spec = importlib.util.spec_from_file_location("view_field_guide", RENDERER)
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+def guide_with_parent(guide="2026-10-09-概率论-极限定理", topic="中心极限定理的收敛速度", point="收敛速度"):
+    payload = valid_guide()
+    payload["topic"] = topic
+    payload["parent"] = {"guide": guide, "topic": "概率论 · 极限定理", "point": point}
+    return payload
+
+
+def embedded_data(html_path):
+    html = Path(html_path).read_text(encoding="utf-8")
+    match = re.search(r'<script id="kc-guide-data" type="application/json">(.*?)</script>', html, re.DOTALL)
+    return json.loads(match.group(1))
+
+
+def index_data(library):
+    index = (Path(library) / "index.html").read_text(encoding="utf-8")
+    return json.loads(re.search(r"const DATA = (.*?);\n", index).group(1))
+
+
+def run_node(script):
+    with tempfile.TemporaryDirectory() as tmp:
+        runner = Path(tmp) / "probe.js"
+        runner.write_text(script, encoding="utf-8")
+        result = subprocess.run(
+            [shutil.which("node"), str(runner)], stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+            text=True, check=False,
+        )
+    if result.returncode != 0:
+        raise AssertionError(result.stderr)
+    return json.loads(result.stdout)
+
+
+PARENT_GUIDE_ERROR = "parent.guide must be a library file name without path or extension"
+PARENT_TOPIC_ERROR = "parent.topic must be a non-empty string"
+PARENT_POINT_ERROR = "parent.point must be a non-empty string"
+
+
+def parent_with(**fields):
+    parent = {"guide": "g", "topic": "父指南", "point": "深挖点"}
+    parent.update(fields)
+    return parent
+
+
+# Each case breaks one rule of `parent`; Python and the browser must report exactly these errors.
+INVALID_PARENT_CASES = (
+    (None, ["parent must be an object"]),
+    ([], ["parent must be an object"]),
+    ("2026-10-09-概率论", ["parent must be an object"]),
+    ({"topic": "父指南", "point": "深挖点"}, [PARENT_GUIDE_ERROR]),
+    (parent_with(guide=7), [PARENT_GUIDE_ERROR]),
+    (parent_with(guide=""), [PARENT_GUIDE_ERROR]),
+    (parent_with(guide=" " + chr(0x3000)), [PARENT_GUIDE_ERROR]),
+    (parent_with(guide="notes/2026-10-09"), [PARENT_GUIDE_ERROR]),
+    (parent_with(guide="notes\\2026-10-09"), [PARENT_GUIDE_ERROR]),
+    (parent_with(guide="/etc/passwd"), [PARENT_GUIDE_ERROR]),
+    (parent_with(guide="."), [PARENT_GUIDE_ERROR]),
+    (parent_with(guide=".."), [PARENT_GUIDE_ERROR]),
+    (parent_with(guide="g.json"), [PARENT_GUIDE_ERROR]),
+    (parent_with(guide="g.JSON"), [PARENT_GUIDE_ERROR]),
+    (parent_with(guide="g.Html"), [PARENT_GUIDE_ERROR]),
+    (parent_with(guide="g.json.html"), [PARENT_GUIDE_ERROR]),
+    (parent_with(guide="g\n"), [PARENT_GUIDE_ERROR]),
+    (parent_with(guide="g\x00h"), [PARENT_GUIDE_ERROR]),
+    (parent_with(guide="g\x85"), [PARENT_GUIDE_ERROR]),
+    (parent_with(guide="g\ud800"), [PARENT_GUIDE_ERROR]),
+    (parent_with(guide="g\udc00"), [PARENT_GUIDE_ERROR]),
+    ({"guide": "g", "point": "深挖点"}, [PARENT_TOPIC_ERROR]),
+    (parent_with(topic=5), [PARENT_TOPIC_ERROR]),
+    (parent_with(point=None), [PARENT_POINT_ERROR]),
+    (parent_with(topic="\n", point=" "), [PARENT_TOPIC_ERROR, PARENT_POINT_ERROR]),
+    # JSON.parse keeps "__proto__" as an ordinary key, so its contents must not count as the parent's fields.
+    ({"__proto__": parent_with()}, [PARENT_GUIDE_ERROR, PARENT_TOPIC_ERROR, PARENT_POINT_ERROR]),
+)
+
+# Names that look odd but are not paths, controls or .json/.html suffixes; both runtimes accept them.
+# The long s (U+017F) folds to "s" under case-insensitive matching, so the suffix check spells cases out.
+LOOKALIKE_GUIDE_NAMES = (
+    "g.jſon", "g.htᴍl", "a／b", "g．json", "g.jsonl", "g.htm", "g.json ", "g.json​",
+    "...", ".hidden", "index", "📘 期权", "2026-10-09-概率论-极限定理",
+)
+
+
+class DeepDiveTests(unittest.TestCase):
+    def setUp(self):
+        tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(tmp.cleanup)
+        self.root = Path(tmp.name)
+        self.source = self.root / "source"
+        self.source.mkdir()
+        self.library = self.root / "library"
+
+    def write(self, payload, name, directory=None):
+        path = (directory or self.source) / name
+        path.parent.mkdir(parents=True, exist_ok=True)
+        # ASCII escapes keep lone surrogates writable; the renderer decodes them back.
+        path.write_text(json.dumps(payload), encoding="utf-8")
+        return path
+
+    def pages(self):
+        if not self.library.exists():
+            return set()
+        return {path for path in self.library.glob("*.html") if path.name != "index.html"}
+
+    def archive(self, payload, name, *extra):
+        """Render a guide into the library and return (result, the one page it added)."""
+        before = self.pages()
+        result = run_renderer(self.write(payload, name), self.library, *extra)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        added = self.pages() - before
+        self.assertEqual(len(added), 1, added)
+        return result, added.pop()
+
+    # AC1 ------------------------------------------------------------------------------------
+
+    def test_parent_is_kept_verbatim_and_a_missing_parent_is_only_a_note(self):
+        payload = guide_with_parent()
+        payload["parent"]["note"] = "未知字段照常保留在 JSON 里"
+        result, page = self.archive(payload, "child.json")
+
+        self.assertIn("父指南「2026-10-09-概率论-极限定理」不在领域库里", result.stdout)
+        self.assertEqual(json.loads(page.with_suffix(".json").read_text(encoding="utf-8")), payload)
+        embedded = embedded_data(page)
+        self.assertEqual(embedded["parent"], payload["parent"])
+        self.assertNotIn("_parent_href", embedded)
+        self.assertNotIn("_children", embedded)
+
+        outside = run_renderer(self.write(payload, "beside.json"), self.root / "unused", "--no-archive")
+        self.assertEqual(outside.returncode, 0, outside.stderr)
+        self.assertEqual(embedded_data(self.source / "beside.html")["parent"], payload["parent"])
+        self.assertFalse((self.root / "unused").exists())
+
+    def test_invalid_parent_is_rejected_before_any_output_is_written(self):
+        for value, expected in INVALID_PARENT_CASES:
+            with self.subTest(value=value):
+                payload = valid_guide()
+                payload["parent"] = value
+                result = run_renderer(self.write(payload, "bad.json"), self.library)
+
+                self.assertEqual(result.returncode, 2)
+                for message in expected:
+                    self.assertIn(message, result.stderr)
+                self.assertFalse((self.source / "bad.html").exists())
+                self.assertFalse(self.library.exists())
+
+    def test_hand_written_derived_fields_never_reach_the_page(self):
+        payload = valid_guide()
+        payload["_parent_href"] = "javascript:alert(1)"
+        payload["_children"] = [{"topic": "伪造的子指南", "point": "x", "href": "evil.html"}]
+        _result, page = self.archive(payload, "forged.json")
+        outside = run_renderer(self.write(payload, "beside.json"), self.root / "unused", "--no-archive")
+        self.assertEqual(outside.returncode, 0, outside.stderr)
+
+        for html in (page, self.source / "beside.html"):
+            with self.subTest(page=html.name):
+                embedded = embedded_data(html)
+                self.assertNotIn("_parent_href", embedded)
+                self.assertNotIn("_children", embedded)
+
+    # AC2 ------------------------------------------------------------------------------------
+
+    @unittest.skipUnless(shutil.which("node"), "Node.js is unavailable for validator parity")
+    def test_python_and_browser_report_identical_parent_errors(self):
+        module = load_renderer()
+        valid = [valid_guide(), guide_with_parent()]
+        extra = guide_with_parent()
+        extra["parent"]["note"] = 1                       # unknown keys are ignored
+        valid.append(extra)
+        for name in LOOKALIKE_GUIDE_NAMES:
+            valid.append(guide_with_parent(guide=name))
+        outer = valid_guide()
+        outer["__proto__"] = {"parent": 5}                # an ordinary key, not the guide's parent
+        valid.append(outer)
+
+        invalid = []
+        for value, _ in INVALID_PARENT_CASES:
+            payload = valid_guide()
+            payload["parent"] = value
+            invalid.append(payload)
+        blank = []
+        for char in module.BLANK_CHARS:
+            for field in ("guide", "topic", "point"):
+                payload = guide_with_parent()
+                payload["parent"][field] = char * 2
+                blank.append(payload)
+
+        payloads = valid + invalid + blank
+        # Feed the browser through JSON.parse, exactly like an imported or embedded guide.
+        browser = run_viewer_probe(
+            "const payloads = JSON.parse(%s);\nprocess.stdout.write(JSON.stringify(payloads.map(validateGuideInBrowser)));"
+            % json.dumps(json.dumps(payloads))
+        )
+        python = [module.validate_guide(payload) for payload in payloads]
+
+        self.assertEqual(python[: len(valid)], [[]] * len(valid))
+        self.assertEqual(
+            python[len(valid) : len(valid) + len(invalid)],
+            [expected for _, expected in INVALID_PARENT_CASES],
+        )
+        field_errors = {"guide": PARENT_GUIDE_ERROR, "topic": PARENT_TOPIC_ERROR, "point": PARENT_POINT_ERROR}
+        self.assertEqual(
+            python[len(valid) + len(invalid) :],
+            [[field_errors[field]] for _ in module.BLANK_CHARS for field in ("guide", "topic", "point")],
+        )
+        self.assertEqual(python, browser)
+
+    @unittest.skipUnless(shutil.which("node"), "Node.js is unavailable for validator parity")
+    def test_browser_ignores_deep_dive_fields_inherited_from_the_prototype(self):
+        probes = r"""
+globalThis.document = {
+  createElement: tag => ({tagName: tag, childNodes: [], setAttribute(){}, appendChild(child){ this.childNodes.push(child); return child; }}),
+  createTextNode: text => ({data: String(text)})
+};
+const values = {parent: {guide:"g", topic:"继承来的", point:"p"}, guide: "g", topic: "继承来的", point: "p",
+                _parent_href: "inherited.html", _children: [{topic:"继承来的", href:"inherited.html"}], href: "inherited.html"};
+Object.keys(values).forEach(key => Object.defineProperty(Object.prototype, key, {value: values[key], configurable: true, writable: true}));
+const result = {
+  noParent: validateParentInBrowser({}),
+  emptyParent: validateParentInBrowser({parent: {}}),
+  line: renderParentLine({}),
+  emptyLine: renderParentLine({parent: {}}),
+  dives: renderDeepDives({}),
+  emptyChild: renderDeepDives({_children: [{}]})
+};
+Object.keys(values).forEach(key => delete Object.prototype[key]);
+process.stdout.write(JSON.stringify(result));
+"""
+        result = run_viewer_probe(probes)
+
+        self.assertEqual(result["noParent"], [])
+        self.assertEqual(result["emptyParent"], [PARENT_GUIDE_ERROR, PARENT_TOPIC_ERROR, PARENT_POINT_ERROR])
+        for key in ("line", "emptyLine", "dives", "emptyChild"):
+            with self.subTest(key=key):
+                self.assertIsNone(result[key])
+
+    @unittest.skipUnless(shutil.which("node"), "Node.js is unavailable for import tests")
+    def test_import_drops_derived_fields_before_computing_the_progress_key(self):
+        clean = guide_with_parent()
+        forged = json.loads(json.dumps(clean))
+        forged["_parent_href"] = "javascript:alert(1)"
+        forged["_children"] = [{"topic": "伪造的子指南", "href": "evil.html"}]
+        probes = r"""
+let rendered = null, importError = null;
+renderImporter = (message, isError) => { if(isError) importError = message; };
+renderPortableToolbar = () => {};
+render = data => { rendered = data; };
+const bytes = new TextEncoder().encode(%s);
+(async () => {
+  await importGuideFile({name: "child.json", size: bytes.length, arrayBuffer: async () => bytes.buffer});
+  process.stdout.write(JSON.stringify({
+    importError, keys: rendered && Object.keys(rendered), parent: rendered && rendered.parent,
+    storageKey: rendered && rendered._storage_key, cleanKey: browserStorageKey(JSON.parse(%s))
+  }));
+})();
+""" % (json.dumps(json.dumps(forged, ensure_ascii=False)), json.dumps(json.dumps(clean)))
+        result = run_viewer_probe(probes)
+
+        self.assertIsNone(result["importError"])
+        self.assertNotIn("_parent_href", result["keys"])
+        self.assertNotIn("_children", result["keys"])
+        self.assertEqual(result["parent"], clean["parent"])
+        self.assertEqual(result["storageKey"], result["cleanKey"])
+
+    # AC3 ------------------------------------------------------------------------------------
+
+    def test_library_child_links_to_its_parent_and_the_parent_lists_it(self):
+        _result, parent = self.archive(valid_guide(), "parent.json")
+        child = guide_with_parent(guide=parent.stem)
+        result, page = self.archive(child, "child.json")
+
+        self.assertIn("已更新父指南页面：" + parent.name, result.stdout)
+        self.assertEqual(embedded_data(page)["_parent_href"], quote(parent.name, safe=""))
+        self.assertEqual(
+            embedded_data(parent)["_children"],
+            [{"topic": child["topic"], "point": "收敛速度", "href": quote(page.name, safe="")}],
+        )
+
+    def test_out_with_archive_links_only_the_library_copy(self):
+        _result, parent = self.archive(valid_guide(), "parent.json")
+        external = self.root / "external" / "child.html"
+        result = run_renderer(
+            self.write(guide_with_parent(guide=parent.stem), "child.json"), self.library, "--out", str(external)
+        )
+        self.assertEqual(result.returncode, 0, result.stderr)
+
+        library_copy = self.library / "child.html"
+        outside, inside = embedded_data(external), embedded_data(library_copy)
+        self.assertNotIn("_parent_href", outside)
+        self.assertEqual(inside["_parent_href"], quote(parent.name, safe=""))
+        self.assertEqual(outside["_storage_key"], inside["_storage_key"])
+        self.assertEqual([item["href"] for item in embedded_data(parent)["_children"]], ["child.html"])
+
+    def test_no_archive_child_shows_the_parent_name_without_touching_the_library(self):
+        _result, parent = self.archive(valid_guide(), "parent.json")
+        before = parent.read_bytes()
+        result = run_renderer(self.write(guide_with_parent(guide=parent.stem), "child.json"), self.library, "--no-archive")
+
+        self.assertEqual(result.returncode, 0, result.stderr)
+        embedded = embedded_data(self.source / "child.html")
+        self.assertEqual(embedded["parent"]["guide"], parent.stem)
+        self.assertNotIn("_parent_href", embedded)
+        self.assertNotIn("父指南", result.stdout)
+        self.assertEqual(parent.read_bytes(), before)
+
+    def test_guide_naming_itself_gets_no_links_and_no_deep_dive_count(self):
+        self.library.mkdir()
+        payload = guide_with_parent(guide="self-ref")
+        path = self.write(payload, "self-ref.json", self.library)
+        # The second run sees its own page in the library and must still not list or link itself.
+        for _ in range(2):
+            result = run_renderer(path, self.library)
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertIn("parent.guide 指向这份指南自己，已忽略。", result.stdout)
+            embedded = embedded_data(self.library / "self-ref.html")
+            self.assertNotIn("_parent_href", embedded)
+            self.assertNotIn("_children", embedded)
+            self.assertEqual(index_data(self.library)[0]["deep_dives"], 0)
+
+    @unittest.skipUnless(shutil.which("node"), "Node.js is unavailable for render tests")
+    def test_parent_line_and_deep_dive_list_render_safe_links_only(self):
+        probes = r"""
+class FakeText { constructor(text){ this.data = String(text); } get textContent(){ return this.data; } }
+class FakeElement {
+  constructor(tag){ this.tagName = tag; this.className = ""; this.id = ""; this.attrs = {}; this.childNodes = []; this.own = ""; }
+  appendChild(child){ this.childNodes.push(child); return child; }
+  setAttribute(name, value){ this.attrs[name] = String(value); }
+  set textContent(value){ this.childNodes = []; this.own = String(value); }
+  get textContent(){ return this.own + this.childNodes.map(child => child.textContent).join(""); }
+}
+globalThis.document = {
+  createElement: tag => new FakeElement(tag),
+  createTextNode: text => new FakeText(text)
+};
+function dump(node){
+  if(node === null) return null;
+  if(node instanceof FakeText) return node.data;
+  return {tag:node.tagName, cls:node.className, id:node.id, attrs:node.attrs, href:node.href || null,
+          text:node.textContent, children:node.childNodes.map(dump)};
+}
+const parent = {guide:"p", topic:"概率论 · 极限定理", point:"收敛速度"};
+const unsafe = ["javascript:alert(1)", "javascript:alert(1).html", "a/b.html", "https://evil.example/p.html",
+                "p.htm", "%e5.html", ".html", 5, null];
+const children = [
+  {topic:"子一", point:"点一", href:"child-1.html"},
+  {topic:"子二", href:"%E5%AD%90.html"},
+  ...unsafe.map((href, i) => ({topic:"坏" + i, point:"x", href})),
+  {topic:" ", point:"x", href:"blank.html"},
+  {point:"x", href:"no-topic.html"},
+  null, "child.html"
+];
+process.stdout.write(JSON.stringify({
+  linked: dump(renderParentLine({parent, _parent_href: "parent-guide.html"})),
+  plain: dump(renderParentLine({parent})),
+  unsafe: unsafe.map(href => dump(renderParentLine({parent, _parent_href: href}))),
+  noPoint: dump(renderParentLine({parent: {guide:"p", topic:"t"}})),
+  noParent: dump(renderParentLine({})),
+  list: dump(renderDeepDives({_children: children})),
+  allUnsafe: dump(renderDeepDives({_children: children.slice(2)})),
+  notArray: dump(renderDeepDives({_children: {topic:"x", href:"x.html"}})),
+  none: dump(renderDeepDives({}))
+}));
+"""
+        result = run_viewer_probe(probes)
+
+        linked = result["linked"]
+        self.assertEqual((linked["tag"], linked["cls"]), ("nav", "parent-line"))
+        self.assertEqual(linked["attrs"], {"aria-label": "深挖来源"})
+        arrow, label, name, point = linked["children"]
+        self.assertEqual((arrow["cls"], arrow["text"], arrow["attrs"]), ("arrow", "↖", {"aria-hidden": "true"}))
+        self.assertEqual((label["cls"], label["text"]), ("from", "深挖自"))
+        self.assertEqual((name["tag"], name["cls"], name["text"]), ("a", "parent-name", "《概率论 · 极限定理》"))
+        self.assertEqual(name["href"], "parent-guide.html")
+        self.assertEqual((point["cls"], point["text"]), ("point", "· 收敛速度"))
+
+        for line in [result["plain"]] + result["unsafe"]:
+            with self.subTest(line=line["children"][2]):
+                self.assertEqual(line["children"][2]["tag"], "span")
+                self.assertIsNone(line["children"][2]["href"])
+                self.assertEqual(line["text"], "↖深挖自《概率论 · 极限定理》· 收敛速度")
+
+        dives = result["list"]
+        self.assertEqual((dives["tag"], dives["cls"]), ("section", "deep-dives"))
+        self.assertEqual(dives["attrs"], {"aria-labelledby": "deep-dives-title"})
+        heading, hint, items = dives["children"]
+        self.assertEqual((heading["tag"], heading["id"], heading["text"]), ("h2", "deep-dives-title", "🔍 延伸深挖"))
+        self.assertEqual(hint["cls"], "deep-dives-hint")
+        first, second = items["children"]
+        self.assertEqual([(c["tag"], c["text"], c["href"]) for c in first["children"]],
+                         [("a", "子一", "child-1.html"), ("span", "点一", None)])
+        self.assertEqual(first["children"][1]["cls"], "point")
+        self.assertEqual([(c["tag"], c["href"]) for c in second["children"]], [("a", "%E5%AD%90.html")])
+        for key in ("noPoint", "noParent", "allUnsafe", "notArray", "none"):
+            with self.subTest(key=key):
+                self.assertIsNone(result[key])
+
+    def test_parent_line_leads_the_hero_and_deep_dives_sit_before_references(self):
+        viewer = VIEWER.read_text(encoding="utf-8")
+        body = viewer.split("function render(data){", 1)[1].split("\nfunction ", 1)[0]
+        line = body.index("if(parentLine) hero.appendChild(parentLine);")
+        kicker = body.index('hero.appendChild(el("div","kicker", data.domain))')
+        outcomes = body.index("renderOutcomes(data.outcomes_summary, data.outcomes)")
+        dives = body.index("if(deepDives) app.appendChild(deepDives);")
+        references = body.index("renderReferences(REFS)")
+        self.assertLess(line, kicker)
+        self.assertLess(outcomes, dives)
+        self.assertLess(dives, references)
+
+    # AC4 ------------------------------------------------------------------------------------
+
+    def test_three_generations_link_both_ways_and_leave_the_parent_json_alone(self):
+        unrelated_payload = valid_guide()
+        unrelated_payload["topic"] = "统计学入门"
+        _result, unrelated = self.archive(unrelated_payload, "unrelated.json")
+        parent_payload = valid_guide()
+        parent_payload["topic"] = "概率论 · 极限定理"
+        _result, parent = self.archive(parent_payload, "parent.json")
+        # Pin distinct past times so the index order and dates depend on them alone.
+        now = time.time()
+        os.utime(str(unrelated.with_suffix(".json")), (now - 2 * 86400, now - 2 * 86400))
+        os.utime(str(parent.with_suffix(".json")), (now - 86400, now - 86400))
+        parent_json = parent.with_suffix(".json")
+        json_bytes, json_mtime = parent_json.read_bytes(), parent_json.stat().st_mtime_ns
+        parent_key = embedded_data(parent)["_storage_key"]
+
+        _result, child = self.archive(guide_with_parent(guide=parent.stem, topic="收敛速度"), "child.json")
+        _result, grandchild = self.archive(
+            guide_with_parent(guide=child.stem, topic="Berry–Esseen 界", point="常数的最优值"), "grandchild.json"
+        )
+
+        self.assertEqual(parent_json.read_bytes(), json_bytes)
+        self.assertEqual(parent_json.stat().st_mtime_ns, json_mtime)
+        parent_view, child_view, grandchild_view = (embedded_data(p) for p in (parent, child, grandchild))
+        self.assertEqual(parent_view["_storage_key"], parent_key)
+        self.assertNotIn("_parent_href", parent_view)
+        self.assertEqual([c["href"] for c in parent_view["_children"]], [quote(child.name, safe="")])
+        self.assertEqual(child_view["_parent_href"], quote(parent.name, safe=""))
+        self.assertEqual(child_view["_children"], [
+            {"topic": "Berry–Esseen 界", "point": "常数的最优值", "href": quote(grandchild.name, safe="")}
+        ])
+        self.assertEqual(grandchild_view["_parent_href"], quote(child.name, safe=""))
+        self.assertNotIn("_children", grandchild_view)
+
+        entries = index_data(self.library)
+        self.assertEqual(
+            [e["topic"] for e in entries], ["Berry–Esseen 界", "收敛速度", "概率论 · 极限定理", "统计学入门"]
+        )
+        by_topic = {e["topic"]: e for e in entries}
+        self.assertEqual(
+            by_topic["概率论 · 极限定理"]["date"], datetime.fromtimestamp(now - 86400).strftime("%Y-%m-%d")
+        )
+        self.assertEqual([by_topic[t]["deep_dives"] for t in ("概率论 · 极限定理", "收敛速度", "Berry–Esseen 界")], [1, 1, 0])
+
+    def test_parent_page_keeps_the_progress_key_it_already_carries(self):
+        module = load_renderer()
+        # A page archived from an --out render carries the external page's key, not its own path hash.
+        result = run_renderer(
+            self.write(valid_guide(), "parent.json"), self.library, "--out", str(self.root / "outside" / "parent.html")
+        )
+        self.assertEqual(result.returncode, 0, result.stderr)
+        parent = self.library / "parent.html"
+        key = embedded_data(parent)["_storage_key"]
+        self.assertNotEqual(key, module.path_storage_key(parent))
+        # A page without a usable embedded key falls back to its path hash.
+        legacy_payload = valid_guide()
+        legacy_payload["topic"] = "旧页面"
+        self.write(legacy_payload, "legacy.json", self.library)
+        (self.library / "legacy.html").write_text("<p>没有数据槽的旧页面</p>", encoding="utf-8")
+
+        self.archive(guide_with_parent(guide="parent", topic="子一"), "child-1.json")
+        self.archive(guide_with_parent(guide="legacy", topic="子二"), "child-2.json")
+
+        self.assertEqual(embedded_data(parent)["_storage_key"], key)
+        self.assertEqual(len(embedded_data(parent)["_children"]), 1)
+        legacy = self.library / "legacy.html"
+        self.assertEqual(embedded_data(legacy)["_storage_key"], module.path_storage_key(legacy))
+
+    def test_re_rendering_a_library_guide_in_place_keeps_its_progress_key(self):
+        module = load_renderer()
+        result = run_renderer(
+            self.write(valid_guide(), "parent.json"), self.library, "--out", str(self.root / "outside" / "parent.html")
+        )
+        self.assertEqual(result.returncode, 0, result.stderr)
+        parent = self.library / "parent.html"
+        key = embedded_data(parent)["_storage_key"]
+        _result, child = self.archive(guide_with_parent(guide="parent", topic="子"), "child.json")
+        self.assertEqual(len(embedded_data(parent)["_children"]), 1)
+
+        # A child was deleted: re-rendering the parent in place tidies its list and keeps its progress.
+        child.unlink()
+        child.with_suffix(".json").unlink()
+        result = run_renderer(self.library / "parent.json", self.library)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(embedded_data(parent)["_storage_key"], key)
+        self.assertNotIn("_children", embedded_data(parent))
+
+        # A page with no usable key still falls back to its path key.
+        parent.write_text("<p>没有数据槽的旧页面</p>", encoding="utf-8")
+        result = run_renderer(self.library / "parent.json", self.library)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(embedded_data(parent)["_storage_key"], module.path_storage_key(parent))
+
+    def test_unreadable_parent_page_is_left_alone_with_a_warning(self):
+        _result, parent = self.archive(valid_guide(), "parent.json")
+        before = parent.read_bytes()
+        mode = parent.stat().st_mode & 0o777
+        parent.chmod(0)
+        try:
+            if os.access(str(parent), os.R_OK):
+                self.skipTest("running with privileges that ignore file permissions")
+            result, child = self.archive(guide_with_parent(guide=parent.stem, topic="子"), "child.json")
+        finally:
+            parent.chmod(mode)
+        self.assertIn("警告：父指南页面没能更新", result.stderr)
+        self.assertEqual(parent.read_bytes(), before)
+        self.assertEqual(parent.stat().st_mode & 0o777, mode)
+        self.assertEqual(embedded_data(child)["_parent_href"], quote(parent.name, safe=""))
+
+    def test_mutually_referencing_guides_render_promptly_with_both_links(self):
+        self.library.mkdir()
+        a = self.write(guide_with_parent(guide="b", topic="甲"), "a.json", self.library)
+        b = self.write(guide_with_parent(guide="a", topic="乙"), "b.json", self.library)
+        for path in (a, b):
+            result = run_renderer(path, self.library, timeout=60)
+            self.assertEqual(result.returncode, 0, result.stderr)
+
+        for page, other, topic in (("a.html", "b.html", "乙"), ("b.html", "a.html", "甲")):
+            with self.subTest(page=page):
+                embedded = embedded_data(self.library / page)
+                self.assertEqual(embedded["_parent_href"], other)
+                self.assertEqual(embedded["_children"], [{"topic": topic, "point": "收敛速度", "href": other}])
+
+    def test_unusable_parent_pages_are_left_alone_and_the_child_still_succeeds(self):
+        self.library.mkdir()
+        (self.library / "broken.json").write_text("{not json", encoding="utf-8")
+        (self.library / "broken.html").write_text("<p>keep broken</p>", encoding="utf-8")
+        self.write(valid_guide(), "linked.json", self.library)
+        target = self.root / "target.html"
+        target.write_text("<p>keep target</p>", encoding="utf-8")
+        (self.library / "linked.html").symlink_to(target)
+        index_guide = valid_guide()
+        index_guide["topic"] = "叫 index 的指南"
+        self.write(index_guide, "index.json", self.library)
+
+        for number, guide in enumerate(("broken", "linked", "index", "INDEX")):
+            with self.subTest(guide=guide):
+                result, page = self.archive(guide_with_parent(guide=guide, topic=f"子{number}"), f"child-{number}.json")
+                self.assertIn(f"父指南「{guide}」不在领域库里", result.stdout)
+                self.assertNotIn("_parent_href", embedded_data(page))
+
+        self.assertEqual((self.library / "broken.html").read_text(encoding="utf-8"), "<p>keep broken</p>")
+        self.assertTrue((self.library / "linked.html").is_symlink())
+        self.assertEqual(target.read_text(encoding="utf-8"), "<p>keep target</p>")
+        index = (self.library / "index.html").read_text(encoding="utf-8")
+        self.assertIn("知识罗盘 · 领域库", index)
+        self.assertNotIn("kc-guide-data", index)
+        # A hand-placed index.json is not a guide: no card links the index to itself.
+        self.assertNotIn("index.html", [entry["html"] for entry in index_data(self.library)])
+
+    def test_parent_page_write_failure_warns_without_failing_the_child(self):
+        _result, parent = self.archive(valid_guide(), "parent.json")
+        before = parent.read_bytes()
+        child_path = self.write(guide_with_parent(guide=parent.stem, topic="子"), "child.json")
+        module = load_renderer()
+        original = module.write_viewer
+
+        def failing(html_path, *args, **kwargs):
+            if Path(html_path).name == parent.name:
+                raise OSError("磁盘只读")
+            return original(html_path, *args, **kwargs)
+
+        stdout, stderr = io.StringIO(), io.StringIO()
+        argv = [str(RENDERER), str(child_path), "--library", str(self.library), "--no-open"]
+        with mock.patch.object(module, "write_viewer", failing), mock.patch.object(sys, "argv", argv), \
+                redirect_stdout(stdout), redirect_stderr(stderr):
+            code = module.main()
+
+        self.assertEqual(code, 0, stderr.getvalue())
+        self.assertIn("警告：父指南页面没能更新（磁盘只读）。子指南已生成", stderr.getvalue())
+        self.assertNotIn("警告", stdout.getvalue())
+        self.assertEqual(parent.read_bytes(), before)
+        self.assertEqual(sorted(e["topic"] for e in index_data(self.library)), ["子", "概率论入门"])
+
+    # AC6 ------------------------------------------------------------------------------------
+
+    def test_library_index_projects_parent_and_counts_direct_deep_dives(self):
+        module = load_renderer()
+        self.library.mkdir()
+        parent = valid_guide()
+        parent["topic"] = "父"
+        child = guide_with_parent(guide="p", topic="子")
+        child["parent"]["note"] = "旁注"
+        child["parent"]["__proto__"] = {"guide": "<b>x</b>", "topic": 5}
+        old = valid_guide()
+        old["topic"] = "旧"
+        for stem, guide in (("p", parent), ("c", child), ("o", old)):
+            self.write(guide, f"{stem}.json", self.library)
+            (self.library / f"{stem}.html").write_text("ok", encoding="utf-8")
+
+        index_path, count = module.build_index(self.library)
+        literal = re.search(r"const DATA = (.*?);\n", index_path.read_text(encoding="utf-8")).group(1)
+        by_topic = {entry["topic"]: entry for entry in json.loads(literal)}
+
+        self.assertEqual(count, 3)
+        self.assertEqual(by_topic["子"]["parent"], {"guide": "p", "topic": "概率论 · 极限定理", "point": "收敛速度"})
+        self.assertEqual((by_topic["父"]["parent"], by_topic["父"]["deep_dives"]), (None, 1))
+        self.assertEqual((by_topic["旧"]["parent"], by_topic["旧"]["deep_dives"]), (None, 0))
+        self.assertEqual(by_topic["子"]["deep_dives"], 0)
+
+        if shutil.which("node"):
+            # Evaluate the payload the way index.html does: as an object literal, not via JSON.parse.
+            evaluated = run_node(
+                "const DATA = %s;\n"
+                "const parent = DATA.find(entry => entry.topic === \"子\").parent;\n"
+                "process.stdout.write(JSON.stringify({keys: Object.keys(parent),\n"
+                "  plainProto: Object.getPrototypeOf(parent) === Object.prototype}));" % literal
+            )
+            self.assertEqual(evaluated["keys"], ["guide", "topic", "point"])
+            self.assertTrue(evaluated["plainProto"])
+
+    @unittest.skipUnless(shutil.which("node"), "Node.js is unavailable for index template tests")
+    def test_index_cards_mark_children_and_parents_and_leave_old_cards_alone(self):
+        module = load_renderer()
+        base = {"domain": "数学 · 概率论", "confidence": "", "disciplines": ["数学"], "date": "2026-10-01",
+                "sources": 2, "unverified": 1, "classification": {}}
+        entries = [
+            dict(base, topic="子", html="c.html", deep_dives=0,
+                 parent={"guide": "p", "topic": "<b>父</b>&\"", "point": "点"}),
+            dict(base, topic="父", html="p.html", parent=None, deep_dives=2),
+            dict(base, topic="旧", html="o.html", parent=None, deep_dives=0),
+            dict(base, topic="更旧", html="old.html"),        # written before deep dives existed
+            dict(base, topic="怪", html="w.html", parent={"guide": "p", "topic": 5, "point": "点"}, deep_dives=1.5),
+            dict(base, topic="怪二", html="w2.html", parent=None, deep_dives="3"),
+        ]
+        page = module.inline(INDEX_TEMPLATE, module.INDEX_PLACEHOLDER, entries)
+        script = page.split("<script>\n", 1)[1].rsplit("</script>", 1)[0]
+        cards = run_node(
+            "const cards = [];\n"
+            "const nodes = {\"#sub\": {textContent: \"\"}, \"#list\": {innerHTML: \"\", appendChild(card){ cards.push(card); }}};\n"
+            "globalThis.document = {querySelector: selector => nodes[selector],\n"
+            "  createElement: tag => ({tagName: tag, className: \"\", href: \"\", innerHTML: \"\"})};\n"
+            + script
+            + "\nprocess.stdout.write(JSON.stringify(cards.map(card => card.innerHTML)));"
+        )
+
+        legacy = ('<div class="kicker">数学 · 概率论</div><div class="top"><div class="domain">{}</div></div>'
+                  '<div class="disc"><span>数学</span></div><div class="meta"><span>2026-10-01</span>'
+                  '<span>2 来源</span><span class="warnflag">⚠ 1 未核实</span></div>')
+        self.assertIn(
+            '<div class="domain">子</div></div><div class="from"><span aria-hidden="true">↳ </span>'
+            "深挖自《&lt;b&gt;父&lt;/b&gt;&amp;&quot;》</div><div class=\"disc\">",
+            cards[0],
+        )
+        self.assertNotIn("份延伸", cards[0])
+        self.assertTrue(cards[1].endswith(
+            '<span class="dives"><span aria-hidden="true">🔍 </span>2 份延伸</span></div>'
+        ))
+        self.assertNotIn("深挖自", cards[1])
+        for card, topic in zip(cards[2:], ("旧", "更旧", "怪", "怪二")):
+            with self.subTest(topic=topic):
+                self.assertEqual(card, legacy.format(topic))
 
 
 if __name__ == "__main__":

@@ -63,6 +63,27 @@
         "含「学成之后」：outcomes_summary 诚实说明学完后的大致水平与差距；outcomes 分知识、能力两类各 2–4 条，每条具体可检验、附自检标志、能追溯到路线的阶段或资源，不夸大、不写职业或收入承诺",
         "含 classification 学科分类标签：能对照官方说明核实时 isced 给出合适的 ISCED-F 2013 四位细类代码（字符串）与中文名，能查到时 subjects 给出 1–3 个维基数据编号与常用中文名；每个编号都经搜索核实、确实指向对应学科或概念（不是同名论文、期刊或人物），查不到就不写，不凭记忆编造"
       ]
+    },
+    {
+      "id": 4,
+      "prompt": "这是我之前用知识罗盘生成的期权指南（evals/files/options-greeks-parent.json）。里面说做了 delta 对冲的仓位还要再做 gamma 对冲，这块我没太懂，想单独深挖一下 gamma 对冲。",
+      "expected_output": "进入深挖模式：读出父指南，确认这次只深挖「gamma 对冲」一个点后再研究，产出一份子指南。domain 与 confidence 照抄父指南，不重新判断领域；fragments 写用户这次的深挖点，domain_judgment 说明从哪份指南的哪个点深挖而来。顶层 parent 为 {guide: \"options-greeks-parent\", topic: \"期权：希腊字母与波动率\", point: 一句话写 gamma 对冲}。资源只围绕 gamma 对冲（如 gamma 的定义与随时间、价格的变化，gamma 与 theta 的此消彼长，动态对冲与 gamma scalping），不重复父指南已列的 Hull、Natenberg、Black–Scholes、Merton、OIC、Cboe、MIT OCW 等来源，确需先读的写进 prerequisites。尽量四层，确实找不到专门来源才少于四层并在 overview 说明。学科分类粗层沿用 0412，细层换成更窄、经核实的概念。渲染并归档时父指南不在库里属正常，子指南页面只显示父指南名；父指南文件不被改动。",
+      "files": [
+        "evals/files/options-greeks-parent.json"
+      ],
+      "assertions": [
+        "识别出这是对已有指南的深挖请求，按深挖模式处理，而不是重新做一份期权总览或去修改父指南",
+        "研究前先向用户确认深挖点（gamma 对冲），一个点只产出一份子指南",
+        "顶层 parent 三项齐全：guide 为 \"options-greeks-parent\"（不带路径和扩展名），topic 与父指南 topic「期权：希腊字母与波动率」逐字一致，point 用一句话写明 gamma 对冲",
+        "domain、confidence 照抄父指南，不重新做领域解码；fragments 写用户这次的深挖点，domain_judgment 说明是从哪份指南的哪个点深挖出来的",
+        "资源紧扣 gamma 对冲本身，不是期权入门的泛泛罗列",
+        "不把父指南 layers 与 references 里已列的来源（Hull、Natenberg、Black–Scholes 论文、Merton 论文、OIC、Cboe 期权学院与计算器、MIT 18.S096）再列为子指南资源；确需先读的写进 prerequisites",
+        "每条来源带真实 URL 或稳定标识（ISBN/DOI）并经核实，未能核实的标 verified:false，无编造来源",
+        "尽量保持四层；少于四层时至少两层，且 overview 里说明为什么少，不拿父指南的通用来源凑层",
+        "产出 JSON 并由 view_field_guide.py 渲染为自包含 HTML 并归档；父指南不在库里时正常提示、不报错，父指南 JSON 未被改动",
+        "含「学成之后」：outcomes_summary 诚实说明学完后的大致水平与差距；outcomes 分知识、能力两类各 2–4 条，每条具体可检验、附自检标志、能追溯到路线的阶段或资源，不夸大、不写职业或收入承诺",
+        "含 classification 学科分类标签：isced 沿用父指南的 0412（金融、银行和保险）；subjects 换成比父指南更窄、贴近 gamma 对冲的概念，给出 1–3 个经搜索核实的维基数据编号与常用中文名（不是同名论文、期刊或人物），查不到就不写，不凭记忆编造"
+      ]
     }
   ]
 }
